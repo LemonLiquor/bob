@@ -76,12 +76,12 @@ export default function RoomCreatePage({
       {error ? (
         <div className="text-center">
           <p className="text-red-500 mb-4">{error}</p>
-          <Link href="/games" className="text-blue-500 text-sm">
+          <Link href="/games" className="link-pop text-sm">
             ← 返回游戏广场
           </Link>
         </div>
       ) : (
-        <p className="text-[#999] text-lg">创建房间中...</p>
+        <p className="text-muted text-lg">创建房间中...</p>
       )}
     </main>
   );

@@ -1,6 +1,266 @@
 @import "tailwindcss";
 
-/* 你的自定义样式可以写在这里 */
+/* ============================================================
+   Bauhaus 主题 — 完整模板风格（明/暗两套）
+   红 #E63946 / 黄 #F4D35E / 蓝 #457B9D / 黑 #1D1D1D / 米白 #F1FAEE
+   模块化：视觉细节收敛在两级 —— ① token 变量 ② 组件类（@layer components）
+   后续小范围改风格 = 只动本文件对应位置
+   ============================================================ */
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-accent: var(--accent);
+  --color-info: var(--info);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-desk: var(--desk);
+  --color-ink: var(--ink);
+  --color-on-primary: var(--on-primary);
+  --color-secondary: var(--secondary);
+  --color-muted: var(--muted);
+  --color-disabled: var(--disabled);
+  --color-line: var(--line);
+  --color-highlight: var(--primary);
+  --color-highlight-bg: var(--highlight-bg);
+  --shadow-sm: var(--shadow-sm-val);
+  --shadow-pop: var(--shadow-pop-val);
+  --shadow-lg: var(--shadow-lg-val);
+}
+
+/* ---------- 明色（默认） ---------- */
+:root {
+  --primary: #e63946;
+  --accent: #f4d35e;
+  --info: #457b9d;
+  --ink: #1d1d1d;
+  --surface: #f1faee;
+  --card: #f1faee;
+  --desk: #f1faee;
+  --on-primary: #f1faee;
+  --secondary: #5a6a6a;
+  --muted: #7a8a8a;
+  --disabled: #9aaaaa;
+  --line: #1d1d1d;
+  --highlight-bg: rgba(230, 57, 70, 0.08);
+  --glass-bg: rgba(241, 250, 238, 0.15);
+  --glass-border: rgba(29, 29, 29, 0.2);
+  --shadow-sm-val: 4px 4px 0 var(--ink);
+  --shadow-pop-val: 8px 8px 0 var(--ink);
+  --shadow-lg-val: 12px 12px 0 var(--ink);
+}
+
+/* ---------- 暗色 ---------- */
+[data-theme="dark"] {
+  --ink: #f1faee;
+  --surface: #1d1d1d;
+  --card: #1d1d1d;
+  --desk: #1d1d1d;
+  --on-primary: #f1faee;
+  --secondary: #b8c8c8;
+  --muted: #a0b0b0;
+  --disabled: #6a7a7a;
+  --line: #f1faee;
+  --highlight-bg: rgba(230, 57, 70, 0.2);
+  --glass-bg: rgba(29, 29, 29, 0.4);
+  --glass-border: rgba(241, 250, 238, 0.15);
+  --shadow-sm-val: 4px 4px 0 rgba(244, 211, 94, 0.3);
+  --shadow-pop-val: 8px 8px 0 rgba(244, 211, 94, 0.3);
+  --shadow-lg-val: 12px 12px 0 rgba(244, 211, 94, 0.3);
+}
+
 body {
   margin: 0;
+  font-family: "Space Grotesk", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--surface);
+  color: var(--ink);
+  transition: background 0.5s ease, color 0.5s ease;
+}
+
+/* ============================================================
+   组件类 — 全站视觉细节的唯一入口（后续小改只动这里）
+   ============================================================ */
+@layer components {
+  /* --- 按钮 --- */
+  .btn-pop {
+    display: inline-block;
+    padding: 10px 24px;
+    background: var(--primary);
+    color: var(--on-primary);
+    border: 2px solid var(--ink);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm-val);
+    transition: all 0.2s ease;
+    position: relative;
+  }
+  .btn-pop:hover:not(:disabled) {
+    background: var(--ink);
+    color: var(--surface);
+    transform: translate(-2px, -2px);
+  }
+  .btn-pop:active:not(:disabled) {
+    transform: translate(0, 0);
+  }
+  .btn-pop:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-ghost {
+    display: inline-block;
+    padding: 10px 24px;
+    background: transparent;
+    color: var(--ink);
+    border: 2px solid var(--ink);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .btn-ghost:hover {
+    background: var(--ink);
+    color: var(--surface);
+    transform: translate(-2px, -2px);
+    box-shadow: var(--shadow-sm-val);
+  }
+  .btn-ghost:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .link-pop {
+    color: var(--ink);
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    transition: color 0.2s ease;
+  }
+  .link-pop:hover {
+    color: var(--primary);
+  }
+
+  /* --- 卡片 / 面板 --- */
+  .card-pop {
+    background: var(--card);
+    border: 3px solid var(--ink);
+    box-shadow: var(--shadow-sm-val);
+    position: relative;
+    transition: all 0.3s ease;
+  }
+  .card-pop:hover {
+    transform: translate(-4px, -4px);
+    box-shadow: var(--shadow-pop-val);
+  }
+
+  .panel-pop {
+    background: var(--card);
+    border: 3px solid var(--ink);
+    box-shadow: var(--shadow-pop-val);
+  }
+
+  /* --- 导航（玻璃拟态） --- */
+  .nav-shell {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 2px solid var(--glass-border);
+  }
+
+  /* --- logo 旋转方块 --- */
+  .logo-shape {
+    width: 32px;
+    height: 32px;
+    background: var(--primary);
+    transform: rotate(45deg);
+    box-shadow: var(--shadow-sm-val);
+    position: relative;
+    flex-shrink: 0;
+  }
+  .logo-shape::after {
+    content: "";
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    width: 11px;
+    height: 11px;
+    background: var(--accent);
+    border-radius: 50%;
+  }
+
+  /* --- 输入框 --- */
+  .input-pop {
+    background: var(--surface);
+    border: 2px solid var(--ink);
+    color: var(--ink);
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    outline: none;
+    transition: all 0.2s ease;
+  }
+  .input-pop:focus {
+    border-color: var(--primary);
+    box-shadow: var(--shadow-sm-val);
+  }
+
+  /* --- 虚线放置区（牌堆 / 手牌区 / 导入入口） --- */
+  .dashed-zone {
+    border: 3px dashed var(--ink);
+    background: transparent;
+    transition: all 0.2s ease;
+  }
+  .dashed-zone-over {
+    border: 3px solid var(--primary);
+    background: var(--highlight-bg);
+    box-shadow: var(--shadow-sm-val);
+  }
+
+  /* --- 角标 / 标签 --- */
+  .tag-pop {
+    background: var(--ink);
+    color: var(--surface);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+  }
+
+  /* --- 状态点 --- */
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--ink);
+    display: inline-block;
+  }
+  .status-dot.ok { background: #4caf50; }
+  .status-dot.warn { background: var(--accent); }
+  .status-dot.err { background: var(--primary); }
+
+  /* --- 几何背景 --- */
+  .geo-bg {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.06;
+  }
+  .geo-circle {
+    position: absolute;
+    border-radius: 50%;
+    border: 3px solid var(--ink);
+  }
+  .geo-rect {
+    position: absolute;
+    border: 3px solid var(--ink);
+  }
+  .geo-triangle {
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 40px solid transparent;
+    border-right: 40px solid transparent;
+    border-bottom: 70px solid var(--ink);
+  }
+  [data-theme="dark"] .geo-bg { opacity: 0.03; }
 }

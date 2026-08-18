@@ -193,7 +193,7 @@ export default function ImportPage() {
     <main className="p-8 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold">PnP PDF 导入</h2>
-        <Link href="/games" className="text-sm text-blue-500 hover:text-blue-700">
+        <Link href="/games" className="link-pop text-sm">
           ← 返回游戏广场
         </Link>
       </div>
@@ -201,7 +201,7 @@ export default function ImportPage() {
       {/* 选择 PDF */}
       <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleFileChange} />
       <button
-        className="w-full border-2 border-dashed border-[#ccc] rounded p-4 text-sm text-[#999] hover:border-blue-400 hover:text-blue-500 cursor-pointer mb-4"
+        className="dashed-zone w-full p-4 text-sm text-muted hover:text-primary cursor-pointer mb-4 bg-card"
         onClick={() => fileRef.current?.click()}
         disabled={busy}
       >
@@ -211,39 +211,39 @@ export default function ImportPage() {
       {file && (
         <>
           {/* 全局参数 */}
-          <div className="flex flex-wrap items-end gap-3 mb-3 p-3 border border-[#eee] rounded">
-            <label className="text-xs text-[#666] flex flex-col gap-1">
+          <div className="flex flex-wrap items-end gap-3 mb-3 p-3 border-2 border-ink">
+            <label className="text-xs text-secondary flex flex-col gap-1">
               行数
               <input
                 type="number" min={1} max={12}
-                className="border rounded px-2 py-1 text-sm w-16"
+                className="input-pop w-16"
                 value={rows}
                 onChange={(e) => handleGridChange("rows", e.target.value)}
               />
             </label>
-            <label className="text-xs text-[#666] flex flex-col gap-1">
+            <label className="text-xs text-secondary flex flex-col gap-1">
               列数
               <input
                 type="number" min={1} max={12}
-                className="border rounded px-2 py-1 text-sm w-16"
+                className="input-pop w-16"
                 value={cols}
                 onChange={(e) => handleGridChange("cols", e.target.value)}
               />
             </label>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="text-[11px] text-[#999]">页边距</span>
+              <span className="text-[11px] text-muted">页边距</span>
               <CropInput label="上" value={crop.marginTop} onChange={(v) => handleCropChange("marginTop", v)} />
               <CropInput label="下" value={crop.marginBottom} onChange={(v) => handleCropChange("marginBottom", v)} />
               <CropInput label="左" value={crop.marginLeft} onChange={(v) => handleCropChange("marginLeft", v)} />
               <CropInput label="右" value={crop.marginRight} onChange={(v) => handleCropChange("marginRight", v)} />
-              <span className="text-[11px] text-[#999] ml-2">牌间隔</span>
+              <span className="text-[11px] text-muted ml-2">牌间隔</span>
               <CropInput label="横" value={crop.gapX} onChange={(v) => handleCropChange("gapX", v)} />
               <CropInput label="纵" value={crop.gapY} onChange={(v) => handleCropChange("gapY", v)} />
             </div>
-            <label className="text-xs text-[#666] flex flex-col gap-1 flex-1 min-w-[160px]">
+            <label className="text-xs text-secondary flex flex-col gap-1 flex-1 min-w-[160px]">
               游戏名
               <input
-                className="border rounded px-2 py-1 text-sm"
+                className="input-pop"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="我的桌游"
@@ -254,7 +254,7 @@ export default function ImportPage() {
           {/* 页对列表（正反交替） */}
           <div className="flex flex-col gap-4">
             {pairs.map((pair, idx) => (
-              <div key={idx} className={`border border-[#eee] rounded p-3 ${pair.enabled ? "" : "opacity-50"}`}>
+              <div key={idx} className={`border-2 border-ink p-3 ${pair.enabled ? "" : "opacity-50"}`}>
                 <div className="flex flex-wrap items-center gap-3 mb-2">
                   <label className="flex items-center gap-1.5 text-sm cursor-pointer">
                     <input
@@ -264,7 +264,7 @@ export default function ImportPage() {
                     />
                     页对 {idx + 1}
                   </label>
-                  <label className="text-xs text-[#666] flex items-center gap-1">
+                  <label className="text-xs text-secondary flex items-center gap-1">
                     正面页
                     <select
                       className="border rounded px-2 py-1 text-sm"
@@ -276,7 +276,7 @@ export default function ImportPage() {
                       ))}
                     </select>
                   </label>
-                  <label className="text-xs text-[#666] flex items-center gap-1">
+                  <label className="text-xs text-secondary flex items-center gap-1">
                     背面页
                     <select
                       className="border rounded px-2 py-1 text-sm"
@@ -289,7 +289,7 @@ export default function ImportPage() {
                       ))}
                     </select>
                   </label>
-                  <span className="text-[11px] text-[#999]">
+                  <span className="text-[11px] text-muted">
                     共 {rows * cols} 张卡（双面打印：正面第 i 行第 j 列 ↔ 背面第 i 行第 {cols} 列）
                   </span>
                 </div>
@@ -301,24 +301,24 @@ export default function ImportPage() {
             ))}
           </div>
 
-          <p className="text-[11px] text-[#999] mt-3">
+          <p className="text-[11px] text-muted mt-3">
             提示：全部页对将合成一个桌游（共 {pairs.filter((p) => p.enabled).length * rows * cols} 张卡）；调整边距/间隔使红线对齐卡牌边缘
           </p>
         </>
       )}
 
       {error && <p className="mt-2 text-red-500 text-sm">{error}</p>}
-      {progress && <p className="mt-2 text-[#666] text-sm">{progress}</p>}
+      {progress && <p className="mt-2 text-secondary text-sm">{progress}</p>}
 
       <div className="flex justify-end gap-2 mt-4">
         <Link
           href="/games"
-          className="px-4 py-2 text-sm text-[#666] border border-[#ccc] rounded hover:bg-[#f5f5f5]"
+          className="btn-ghost text-sm"
         >
           取消
         </Link>
         <button
-          className="px-4 py-2 text-sm bg-blue-500 text-white rounded cursor-pointer hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn-pop text-sm"
           disabled={!file || busy || !name.trim()}
           onClick={handleImport}
         >

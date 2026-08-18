@@ -80,8 +80,8 @@ export default function GamePlayPage({
   if (notFound) {
     return (
       <main className="p-8 text-center">
-        <p className="text-[#999] mb-4">游戏不存在或未上传</p>
-        <Link href="/games" className="text-blue-500 text-sm">
+        <p className="text-muted mb-4">游戏不存在或未上传</p>
+        <Link href="/games" className="link-pop text-sm">
           ← 返回游戏广场
         </Link>
       </main>
@@ -91,7 +91,7 @@ export default function GamePlayPage({
   if (loading || !gameState) {
     return (
       <main className="p-8 flex items-center justify-center min-h-[60vh]">
-        <p className="text-[#999] text-lg">加载中...</p>
+        <p className="text-muted text-lg">加载中...</p>
       </main>
     );
   }
@@ -101,7 +101,7 @@ export default function GamePlayPage({
       {/* 全屏模式无 nav，悬浮返回入口（参考原 nav 白底风格） */}
       <Link
         href="/games"
-        className="fixed top-3 left-3 z-50 bg-white/90 rounded-lg px-3 py-1.5 text-sm text-[#666] shadow-md hover:text-[#333]"
+        className="btn-ghost fixed top-3 left-3 z-50 px-3 py-1.5 text-sm"
       >
         ← 返回广场
       </Link>

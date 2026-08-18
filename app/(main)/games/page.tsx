@@ -112,14 +112,14 @@ export default function GamesPage() {
   if (creating) {
     return (
       <main className="p-8 flex items-center justify-center min-h-[60vh]">
-        <p className="text-[#999] text-lg">创建房间中...</p>
+        <p className="text-muted text-lg">创建房间中...</p>
       </main>
     );
   }
 
   return (
     <main className="p-8">
-      <h2 className="text-xl font-bold mb-6">游戏广场</h2>
+      <h2 className="text-2xl font-bold tracking-tight mb-6">游戏广场</h2>
 
       <div className="flex flex-wrap gap-4">
         {/* 加入房间入口 — 第一张卡片 */}
@@ -129,7 +129,7 @@ export default function GamesPage() {
         {games.map((game) => (
           <div
             key={game.id}
-            className="bg-white rounded-lg p-4 shadow-sm border border-[#eee] min-w-[180px] flex flex-col gap-3"
+            className="card-pop p-4 min-w-[180px] flex flex-col gap-3"
           >
             <div className="flex items-center gap-2">
               <span className="text-2xl">{game.icon}</span>
@@ -137,13 +137,13 @@ export default function GamesPage() {
             </div>
             <div className="flex gap-1.5">
               <button
-                className="text-[11px] text-blue-500 hover:text-blue-700 cursor-pointer"
+                className="link-pop text-[11px]"
                 onClick={() => handlePlay(game.id)}
               >
                 [试玩]
               </button>
               <button
-                className="text-[11px] text-green-600 hover:text-green-800 cursor-pointer"
+                className="link-pop text-[11px]"
                 onClick={() => handleCreateRoom(game.id)}
               >
                 [开房间]
@@ -154,7 +154,7 @@ export default function GamesPage() {
 
         {/* 导入入口 → 独立导入页（多页正反交替 PDF） */}
         <button
-          className="bg-white rounded-lg p-4 shadow-sm border-2 border-dashed border-[#ccc] min-w-[180px] flex flex-col items-center justify-center gap-2 text-[#999] hover:border-blue-400 hover:text-blue-500 cursor-pointer"
+          className="dashed-zone min-w-[180px] flex flex-col items-center justify-center gap-2 text-muted hover:text-primary cursor-pointer bg-card p-4"
           onClick={() => router.push("/import")}
         >
           <span className="text-2xl">+</span>
@@ -163,7 +163,7 @@ export default function GamesPage() {
       </div>
 
       {games.length === 0 && (
-        <p className="text-sm text-[#999] border-2 border-dashed border-[#eee] rounded-lg p-6 text-center mt-4">
+        <p className="text-sm text-muted dashed-zone p-6 text-center mt-4 bg-card">
           游戏列表为空，先导入一个 PDF 桌游吧
         </p>
       )}

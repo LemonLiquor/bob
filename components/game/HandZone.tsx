@@ -14,8 +14,8 @@ export default function HandZone({ seat, cards }: { seat: Seat; cards: CardState
       ref={setNodeRef}
       className={`fixed bottom-4 left-1/2 -translate-x-1/2 rounded-lg p-2 min-h-[184px] flex items-end transition-[border,background] duration-150 z-40 ${
         isOver
-          ? "border-2 border-solid border-[#4a90d9] bg-[rgba(74,144,217,0.06)]"
-          : "border border-dashed border-[#ccc] bg-transparent"
+          ? "dashed-zone-over"
+          : "dashed-zone"
       }`}
       style={{ gap: SPREAD_GAP }}
     >
@@ -25,7 +25,7 @@ export default function HandZone({ seat, cards }: { seat: Seat; cards: CardState
         </div>
       ))}
       {cards.length === 0 && (
-        <span className="text-[11px] text-[#999] px-2 select-none">我的手牌区 [D 抓牌]</span>
+        <span className="text-[11px] text-muted px-2 select-none">我的手牌区 [D 抓牌]</span>
       )}
     </div>
   );

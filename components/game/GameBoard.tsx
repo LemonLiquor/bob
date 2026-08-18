@@ -153,7 +153,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
 
   return (
     <main
-      className="h-full bg-[#f0f0f0] relative overflow-hidden"
+      className="h-full bg-desk relative overflow-hidden"
     >
       <DndContext
         sensors={sensors}

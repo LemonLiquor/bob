@@ -33,11 +33,11 @@ export default function LoginPage() {
   if (checking) return null;
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[#f0f0f0]">
-      <div className="bg-white rounded-lg p-8 shadow-md w-[320px] text-center">
-        <h1 className="text-2xl mb-6">♟️ Box of Boardgames</h1>
+    <main className="min-h-screen flex items-center justify-center bg-desk">
+      <div className="panel-pop p-8 w-[320px] text-center">
+        <h1 className="text-2xl font-bold tracking-tight mb-6">Box of Boardgames</h1>
         <input
-          className="border rounded px-3 py-2 text-lg w-full text-center focus:outline-none focus:border-blue-400"
+          className="input-pop w-full text-center text-lg"
           placeholder="输入昵称"
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -45,7 +45,7 @@ export default function LoginPage() {
           autoFocus
         />
         <button
-          className="w-full bg-blue-500 text-white rounded py-2 text-lg mt-3 cursor-pointer hover:bg-blue-600 disabled:opacity-40"
+          className="btn-pop w-full text-lg mt-4"
           disabled={!name.trim()}
           onClick={handleEnter}
         >

@@ -96,12 +96,12 @@ export default function JoinRoomCard() {
     <>
       {/* 收起态卡片：永远保留在渲染树（弹窗打开时仅被遮罩盖住） */}
       <button
-        className="bg-white rounded-lg p-4 shadow-sm border-2 border-dashed border-green-400 min-w-[180px] flex flex-col items-center justify-center gap-1.5 text-green-600 hover:border-green-500 hover:bg-green-50 cursor-pointer"
+        className="card-pop p-4 min-w-[180px] flex flex-col items-center justify-center gap-1.5 text-green-600 cursor-pointer"
         onClick={() => setOpen(true)}
       >
         <span className="text-2xl">🚪</span>
         <span className="text-sm font-medium">加入房间</span>
-        <span className="text-[11px] text-[#999]">查看开放房间</span>
+        <span className="text-[11px] text-muted">查看开放房间</span>
       </button>
 
       {/* 弹窗：遮罩 + 居中面板（房间列表 + 输入码） */}
@@ -111,22 +111,22 @@ export default function JoinRoomCard() {
           onClick={() => setOpen(false)}
         >
       <div
-        className="bg-white rounded-xl shadow-xl p-6 min-w-[480px] max-w-[560px] max-h-[80vh] overflow-y-auto"
+        className="panel-pop p-6 min-w-[480px] max-w-[560px] max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-medium">
-            🚪 加入房间 <span className="text-sm text-[#999]">({rooms.length} 个开放房间)</span>
+            🚪 加入房间 <span className="text-sm text-muted">({rooms.length} 个开放房间)</span>
           </h3>
           <div className="flex items-center gap-2">
             <button
-              className="text-[11px] text-blue-500 hover:text-blue-700 cursor-pointer"
+              className="link-pop text-[11px]"
               onClick={fetchRooms}
             >
               [刷新]
             </button>
             <button
-              className="text-[11px] text-[#999] hover:text-[#333] cursor-pointer"
+              className="link-pop text-[11px]"
               onClick={() => setOpen(false)}
             >
               [关闭]
@@ -135,7 +135,7 @@ export default function JoinRoomCard() {
         </div>
 
         {rooms.length === 0 ? (
-          <p className="text-sm text-[#999] text-center py-3">
+          <p className="text-sm text-muted text-center py-3">
             暂无开放房间，输入房间码加入或创建一个
           </p>
         ) : (
@@ -146,19 +146,19 @@ export default function JoinRoomCard() {
               return (
                 <li
                   key={room.code}
-                  className="flex items-center gap-3 border border-[#eee] rounded px-3 py-2"
+                  className="flex items-center gap-3 border-2 border-ink px-3 py-2"
                 >
                   <span className="text-lg">{icon}</span>
                   <span className="text-sm flex-1 truncate">{room.gameName}</span>
-                  <span className="font-mono text-sm text-[#666]">{room.code}</span>
-                  <span className="text-[11px] text-[#999] w-8 text-right">
+                  <span className="font-mono text-sm text-secondary">{room.code}</span>
+                  <span className="text-[11px] text-muted w-8 text-right">
                     {room.playerCount}/{room.maxSeats}
                   </span>
                   {joiningCode === room.code ? (
-                    <span className="text-[11px] text-[#999] w-14 text-right">加入中...</span>
+                    <span className="text-[11px] text-muted w-14 text-right">加入中...</span>
                   ) : (
                     <button
-                      className="text-[11px] text-white bg-green-500 rounded px-2 py-0.5 cursor-pointer hover:bg-green-600 disabled:bg-[#ccc] disabled:cursor-not-allowed"
+                      className="text-[11px] text-white bg-green-500 border-2 border-ink px-2 py-0.5 cursor-pointer hover:bg-green-600 disabled:bg-disabled disabled:cursor-not-allowed shadow-sm"
                       disabled={full}
                       onClick={() => doJoin(room.code)}
                     >
@@ -171,20 +171,20 @@ export default function JoinRoomCard() {
           </ul>
         )}
 
-        <div className="border-t border-[#eee] mt-3 pt-3 flex items-center gap-2">
-          <span className="text-[11px] text-[#999]">有房间码？</span>
+        <div className="border-t-2 border-ink mt-3 pt-3 flex items-center gap-2">
+          <span className="text-[11px] text-muted">有房间码？</span>
           <input
-            className="border rounded px-2 py-1 text-sm w-24 focus:outline-none focus:border-green-400"
+            className="input-pop w-24 px-2 py-1"
             placeholder="房间码"
             value={roomCode}
             onChange={(e) => setRoomCode(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && doJoin(roomCode)}
           />
           {joiningCode === roomCode.trim() ? (
-            <span className="text-[11px] text-[#999]">加入中...</span>
+            <span className="text-[11px] text-muted">加入中...</span>
           ) : (
             <button
-              className="bg-green-500 text-white rounded py-1 px-3 text-sm cursor-pointer hover:bg-green-600 disabled:opacity-40"
+              className="bg-green-500 text-white border-2 border-ink px-3 py-1 text-sm cursor-pointer hover:bg-green-600 disabled:opacity-40 shadow-sm"
               disabled={!roomCode.trim()}
               onClick={() => doJoin(roomCode)}
             >
@@ -194,7 +194,7 @@ export default function JoinRoomCard() {
         </div>
 
         {error && <p className="text-red-500 text-[11px] mt-2">{error}</p>}
-        <p className="text-[11px] text-[#999] mt-2">按 ESC 或点击遮罩关闭</p>
+        <p className="text-[11px] text-muted mt-2">按 ESC 或点击遮罩关闭</p>
       </div>
         </div>
       )}

@@ -30,9 +30,9 @@ export default function GridPreview({ prev, label, rows, cols, crop }: {
 
   return (
     <div className="flex-1 min-w-0">
-      <p className="text-[11px] text-[#999] mb-1">{label}</p>
+      <p className="text-[11px] text-muted mb-1">{label}</p>
       {prev ? (
-        <div className="relative border border-[#ddd] rounded overflow-hidden">
+        <div className="relative border-2 border-ink overflow-hidden">
           <img src={prev.src} alt={label} className="w-full block" />
           <div className="absolute inset-0 pointer-events-none">
             {Array.from({ length: rows * cols }).map((_, i) => {
@@ -49,7 +49,7 @@ export default function GridPreview({ prev, label, rows, cols, crop }: {
                     height: `${cellH}%`,
                   }}
                 >
-                  <span className="absolute top-0.5 left-1 text-[10px] text-red-500 font-mono bg-white/70 rounded px-0.5">
+                  <span className="absolute top-0.5 left-1 text-[10px] text-red-500 font-mono bg-card/70 rounded px-0.5">
                     {i + 1}
                   </span>
                 </div>
@@ -58,7 +58,7 @@ export default function GridPreview({ prev, label, rows, cols, crop }: {
           </div>
         </div>
       ) : (
-        <div className="border border-dashed border-[#ccc] rounded h-32 flex items-center justify-center text-xs text-[#999]">
+        <div className="dashed-zone h-32 flex items-center justify-center text-xs text-muted">
           无预览
         </div>
       )}

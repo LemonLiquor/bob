@@ -46,7 +46,7 @@ export default function Card({ card, children, draggable = false }: CardProps) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`w-[120px] h-[168px] rounded-lg flex items-center justify-center select-none relative overflow-hidden ${faceClass} ${shadowClass} ${transitionClass} ${draggable ? "cursor-grab" : "cursor-default"} ${isHovered ? "ring-2 ring-blue-400" : ""}`}
+      className={`w-[120px] h-[168px] rounded-lg flex items-center justify-center select-none relative overflow-hidden ${faceClass} ${shadowClass} ${transitionClass} ${draggable ? "cursor-grab" : "cursor-default"} ${isHovered ? "ring-2 ring-highlight" : ""}`}
       style={cardStyle}
       {...hoverProps}
     >

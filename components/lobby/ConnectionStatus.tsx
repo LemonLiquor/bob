@@ -19,10 +19,10 @@ export default function ConnectionStatus() {
     };
   }, []);
 
-  const dotColor =
-    wsStatus === "connected" ? "bg-green-500" :
-    wsStatus === "reconnecting" ? "bg-yellow-500" :
-    "bg-red-500";
+  const dotClass =
+    wsStatus === "connected" ? "status-dot ok" :
+    wsStatus === "reconnecting" ? "status-dot warn" :
+    "status-dot err";
 
   const label =
     wsStatus === "connected" ? "已连接" :
@@ -31,8 +31,8 @@ export default function ConnectionStatus() {
 
   return (
     <div className="fixed top-2 right-3 flex items-center gap-1.5 z-50">
-      <span className={`inline-block w-2 h-2 rounded-full ${dotColor}`} />
-      <span className="text-[11px] text-[#999]">{label}</span>
+      <span className={`${dotClass}`} />
+      <span className="text-[11px] text-muted">{label}</span>
     </div>
   );
 }

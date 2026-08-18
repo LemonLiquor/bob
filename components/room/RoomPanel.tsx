@@ -89,10 +89,10 @@ export default function RoomPanel() {
   if (!codeRef.current) return null;
 
   return (
-    <div className="fixed top-3 right-3 z-50 bg-white/90 rounded-lg p-3 shadow-md min-w-[200px]">
-      <p className="text-sm font-mono text-[#666] mb-2">房间: {codeRef.current}</p>
+    <div className="panel-pop fixed top-3 right-3 z-50 p-3 min-w-[200px]">
+      <p className="text-sm font-mono text-secondary mb-2">房间: {codeRef.current}</p>
 
-      <p className="text-[10px] text-[#999] mt-1 mb-0.5">座位</p>
+      <p className="text-[10px] text-muted mt-1 mb-0.5">座位</p>
       <ul>
         {seats.map((seat) => {
           const isMe = seat.playerId === playerIdRef.current;
@@ -103,17 +103,17 @@ export default function RoomPanel() {
                 {seat.label} {occupied ? `👤 ${seat.playerName}` : "[空位]"}
               </span>
               {isMe && (
-                <button className="text-[11px] text-red-500 cursor-pointer" onClick={handleVacate}>离座</button>
+                <button className="link-pop text-[11px] text-red-500" onClick={handleVacate}>离座</button>
               )}
               {!isMe && !occupied && (
-                <button className="text-[11px] text-blue-500 cursor-pointer" onClick={() => handleOccupy(seat.id)}>入座</button>
+                <button className="link-pop text-[11px]" onClick={() => handleOccupy(seat.id)}>入座</button>
               )}
             </li>
           );
         })}
       </ul>
 
-      <p className="text-[10px] text-[#999] mt-2 mb-0.5">在线</p>
+      <p className="text-[10px] text-muted mt-2 mb-0.5">在线</p>
       <ul>
         {players.map((p) => (
           <li key={p.id} className="text-sm py-0.5">

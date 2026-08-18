@@ -11,16 +11,16 @@ export default function OtherHandBar({ seat }: { seat: Seat }) {
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-lg px-2.5 py-1.5 flex items-center gap-2 shadow-sm bg-white/85 transition-[border] duration-150 ${
-        isOver ? "border-2 border-solid border-[#4a90d9]" : "border border-dashed border-[#ccc]"
+      className={`dashed-zone rounded-lg px-2.5 py-1.5 flex items-center gap-2 shadow-sm bg-card/85 transition-[border,background] duration-150 ${
+        isOver ? "dashed-zone-over" : ""
       }`}
     >
       <div className="w-6 h-8 rounded-sm overflow-hidden bg-[#1e3a5f] flex items-center justify-center">
         <CardBack />
       </div>
       <div className="text-[11px] leading-tight">
-        <p className="text-[#666]">{seat.label}</p>
-        <p className="text-[#999]">
+        <p className="text-secondary">{seat.label}</p>
+        <p className="text-muted">
           {seat.playerName}
           {seat.handZone.cardIds.length > 0 ? ` · ${seat.handZone.cardIds.length} 张` : ""}
         </p>

@@ -35,10 +35,10 @@ export default function Pile({ pile, cards, onShuffle }: PileProps) {
   }, [isHovered, pile.id, onShuffle]);
 
   const overClass = isOver
-    ? "border-2 border-solid border-[#4a90d9] bg-[rgba(74,144,217,0.06)]"
-    : "border border-dashed border-[#ccc] bg-transparent";
+    ? "dashed-zone-over"
+    : "dashed-zone";
 
-  const containerClass = `absolute rounded-lg transition-[border,background] duration-150 ${overClass} ${isHovered ? "ring-2 ring-blue-400" : ""}`;
+  const containerClass = `absolute rounded-lg transition-[border,background] duration-150 ${overClass} ${isHovered ? "ring-2 ring-highlight" : ""}`;
 
   const containerStyle: React.CSSProperties = {
     left: pile.x,
@@ -70,14 +70,14 @@ export default function Pile({ pile, cards, onShuffle }: PileProps) {
       ))}
 
       {/* 张数角标 */}
-      <div className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1 rounded-full bg-[#333] text-white text-[11px] flex items-center justify-center shadow">
+      <div className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1 rounded-full bg-ink text-surface text-[11px] flex items-center justify-center shadow">
         {count}
       </div>
 
       {/* hover 提示：洗牌 */}
       {isHovered && count > 1 && (
         <button
-          className="absolute -bottom-7 left-1/2 -translate-x-1/2 text-[11px] text-[#999] hover:text-[#333] bg-white/90 rounded px-1.5 py-0.5 shadow cursor-pointer whitespace-nowrap"
+          className="absolute -bottom-7 left-1/2 -translate-x-1/2 text-[11px] text-muted hover:text-ink bg-card/90 rounded px-1.5 py-0.5 shadow cursor-pointer whitespace-nowrap"
           onClick={(e) => {
             e.stopPropagation();
             onShuffle(pile.id);

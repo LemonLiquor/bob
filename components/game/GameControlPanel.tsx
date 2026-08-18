@@ -69,36 +69,32 @@ export default function GameControlPanel({
       onClick={() => setOpen(false)}
     >
       <div
-        className="bg-white rounded-xl shadow-xl p-6 min-w-[280px]"
+        className="panel-pop p-6 min-w-[280px]"
         onClick={(e) => e.stopPropagation()}
       >
         <p className="text-lg font-bold mb-1">控制面板</p>
-        {roomCode && <p className="text-sm text-[#666] mb-4">房间: {roomCode}</p>}
+        {roomCode && <p className="text-sm text-secondary mb-4">房间: {roomCode}</p>}
 
         <div className="flex flex-col gap-2">
           <button
-            className={`rounded px-4 py-2 text-sm transition-colors ${
-              isCreator
-                ? "bg-[#4a90d9] text-white cursor-pointer hover:bg-[#3a7dc5]"
-                : "bg-[#eee] text-[#aaa] cursor-not-allowed"
-            }`}
+            className="btn-pop w-full text-sm"
             onClick={handleRestartClick}
             disabled={!isCreator}
           >
             {confirming ? "再次点击确认重新开始" : "重新开始"}
           </button>
           {!isCreator && (
-            <p className="text-[11px] text-[#aaa] -mt-1">仅房主可重新开始</p>
+            <p className="text-[11px] text-disabled -mt-1">仅房主可重新开始</p>
           )}
 
           <button
-            className="rounded px-4 py-2 text-sm bg-white border border-[#ddd] text-red-500 cursor-pointer hover:bg-red-50 transition-colors"
+            className="btn-ghost w-full text-sm text-red-500"
             onClick={onExit}
           >
             {exitLabel}
           </button>
 
-          <p className="text-[11px] text-[#999] mt-1">按 ESC 关闭</p>
+          <p className="text-[11px] text-muted mt-1">按 ESC 关闭</p>
         </div>
       </div>
     </div>
