@@ -38,3 +38,17 @@
 **否决理由**：类名语法一致，v4 热更新更快；退回需重新配置 config，不值得。
 
 **重新引入的条件**：v4 出现无法绕过的兼容问题时。
+
+---
+
+## 页面全 'use client'：不改造为 server page + 抽 client 组件
+
+- **日期**：2026-08-18（首次提出）
+- **主题**：保留 page 为服务端组件、所有客户端 API 抽成组件的边界重构
+
+**否决理由**：
+- 本项目是浏览器全客户端架构（WS 连接、localStorage session、dnd 全在浏览器），page 改 server 只是把 'use client' 边界下移一层，客户端 JS 体积不变；当前没有 RSC 数据获取、SEO / 静态渲染需求，收益 ≈ 0
+- 逐页评估：play / room / [code] / import / games / login 的页面主体就是交互本身，拆容器组件纯加一层间接；唯二合理的下沉点（(main)/layout 的 WS 状态指示器、page.tsx 重定向改 middleware + cookie）收益微小，不值得现在动
+- 现状已核对：所有 'use client' 均真实使用 hooks / localStorage / WS，无一处多余；root layout、`(game)/layout.tsx`、`CardBack.tsx` 未标（纯静态 / metadata），边界正确
+
+**重新引入的条件**：出现纯展示页（规则页 / 关于页 / 静态落地页）时，新页面直接做 server page + 局部 client 组件，不回溯改造现有页面；或出现 RSC 数据获取 / SEO 需求时重新评估。
