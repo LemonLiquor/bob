@@ -60,3 +60,10 @@ export interface SeatTemplate {
   handZone: { cardIds: string[] };
 }
 
+/** 游戏动作判别联合（传输层 re-export：lib/multiplayer/protocol.ts） */
+export type GameAction =
+  | { type: "move_card"; cardId: string; x: number; y: number }
+  | { type: "move_to_hand"; cardId: string; seatId: string } // seatId 任意（沙盒）
+  | { type: "flip_card"; cardId: string }
+  | { type: "shuffle_pile"; pileId: string };
+

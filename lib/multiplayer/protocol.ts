@@ -2,15 +2,9 @@
 // 共享消息协议 — 客户端和服务端共用
 // ============================================================
 
-import type { CardAsset, GameState, Seat } from "../engine/types";
+import type { CardAsset, GameAction, GameState, Seat } from "../engine/types";
 
-// --- Game Actions ---
-
-export type GameAction =
-  | { type: "move_card"; cardId: string; x: number; y: number }
-  | { type: "move_to_hand"; cardId: string; seatId: string } // seatId 任意（沙盒）
-  | { type: "flip_card"; cardId: string }
-  | { type: "shuffle_pile"; pileId: string };
+export type { GameAction }; // 由 engine/types 定义，此处 re-export 保持 API 不变
 
 // --- Client → Server ---
 

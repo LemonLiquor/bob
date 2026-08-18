@@ -7,23 +7,15 @@ import {
   KeyboardSensor,
   useSensor,
   useSensors,
-  useDroppable,
 } from "@dnd-kit/core";
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import Pile from "@/components/game/Pile";
 import Card from "@/components/game/Card";
-import CardBack from "@/components/game/CardBack";
-import {
-  moveCard,
-  moveCardToHand,
-  flipCard,
-  shufflePile,
-  createSeat,
-  SPREAD_GAP,
-} from "@/lib/engine";
+import HandZone from "@/components/game/HandZone";
+import OtherHandBar from "@/components/game/OtherHandBar";
+import { applyAction, createSeat, findCards } from "@/lib/engine";
 import { CardActionProvider } from "@/lib/engine/card-action";
-import type { CardState, GameState, Seat } from "@/lib/engine";
-import type { GameAction } from "@/lib/multiplayer/protocol";
+import type { GameAction, GameState } from "@/lib/engine";
 import { sessionStore } from "@/lib/multiplayer/session";
 
 // ============================================================
@@ -31,25 +23,6 @@ import { sessionStore } from "@/lib/multiplayer/session";
 //   非受控（默认）：本地 useState，/game 单人沙盒使用
 //   受控：外部 gameState + onAction，/room/[code] 多人使用
 // ============================================================
-
-function applyAction(state: GameState, action: GameAction): GameState {
-  switch (action.type) {
-    case "move_card":
-      return moveCard(state, action.cardId, action.x, action.y);
-    case "move_to_hand":
-      return moveCardToHand(state, action.cardId, action.seatId);
-    case "flip_card":
-      return flipCard(state, action.cardId);
-    case "shuffle_pile":
-      return shufflePile(state, action.pileId);
-  }
-}
-
-function findCards(state: GameState, ids: string[]): CardState[] {
-  return ids
-    .map((id) => state.cards.find((c) => c.id === id))
-    .filter((c): c is CardState => c !== undefined);
-}
 
 interface GameBoardProps {
   gameState?: GameState;
@@ -215,7 +188,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
 
           {/* 自己的手牌区（屏幕底部，spread 展开） */}
           {mySeat && (
-            <MyHandZone seat={mySeat} cards={findCards(gameState, mySeat.handZone.cardIds)} />
+            <HandZone seat={mySeat} cards={findCards(gameState, mySeat.handZone.cardIds)} />
           )}
 
           {/* 其他玩家的手牌区（屏幕顶部，折叠条） */}
@@ -229,53 +202,5 @@ export default function GameBoard({ gameState: propState, onAction, initialState
         </CardActionProvider>
       </DndContext>
     </main>
-  );
-}
-
-// ---- 手牌区（屏幕 UI 组件，不在桌面坐标系） ----
-
-function MyHandZone({ seat, cards }: { seat: Seat; cards: CardState[] }) {
-  const { isOver, setNodeRef } = useDroppable({ id: `hand-${seat.id}` });
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={`fixed bottom-4 left-1/2 -translate-x-1/2 rounded-lg p-2 min-h-[184px] flex items-end transition-[border,background] duration-150 z-40 ${
-        isOver
-          ? "border-2 border-solid border-[#4a90d9] bg-[rgba(74,144,217,0.06)]"
-          : "border border-dashed border-[#ccc] bg-transparent"
-      }`}
-      style={{ gap: SPREAD_GAP }}
-    >
-      {cards.map((card) => (
-        <div key={card.id}>
-          <Card card={card} draggable />
-        </div>
-      ))}
-      {cards.length === 0 && (
-        <span className="text-[11px] text-[#999] px-2 select-none">我的手牌区 [D 抓牌]</span>
-      )}
-    </div>
-  );
-}
-
-function OtherHandBar({ seat }: { seat: Seat }) {
-  const { isOver, setNodeRef } = useDroppable({ id: `hand-${seat.id}` });
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={`rounded-lg px-2.5 py-1.5 flex items-center gap-2 shadow-sm bg-white/85 transition-[border] duration-150 ${
-        isOver ? "border-2 border-solid border-[#4a90d9]" : "border border-dashed border-[#ccc]"
-      }`}
-    >
-      <div className="w-6 h-8 rounded-sm overflow-hidden bg-[#1e3a5f] flex items-center justify-center">
-        <CardBack />
-      </div>
-      <div className="text-[11px] leading-tight">
-        <p className="text-[#666]">{seat.label}</p>
-        <p className="text-[#999]">{seat.playerName}{seat.handZone.cardIds.length > 0 ? ` · ${seat.handZone.cardIds.length} 张` : ""}</p>
-      </div>
-    </div>
   );
 }
