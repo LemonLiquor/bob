@@ -32,7 +32,6 @@ export default function GamePlayPage({
   const assetsRef = useRef<CardAsset[]>([]);
 
   const fetchGame = useCallback(() => {
-    setLoading(true);
     send({ type: "get_game", gameId });
   }, [gameId]);
 
