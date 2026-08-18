@@ -24,7 +24,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     <>
       <nav className="bg-white border-b border-[#eee] h-12 flex items-center justify-between px-4">
         <Link href="/games" className="text-lg font-bold cursor-pointer">
-          ♟️ BoardGame Lab
+          ♟️ Box of Boardgames
         </Link>
         <div className="flex items-center gap-2">
           <span className={`inline-block w-2 h-2 rounded-full ${dotColor}`} />

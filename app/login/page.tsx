@@ -35,7 +35,7 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#f0f0f0]">
       <div className="bg-white rounded-lg p-8 shadow-md w-[320px] text-center">
-        <h1 className="text-2xl mb-6">♟️ BoardGame Lab</h1>
+        <h1 className="text-2xl mb-6">♟️ Box of Boardgames</h1>
         <input
           className="border rounded px-3 py-2 text-lg w-full text-center focus:outline-none focus:border-blue-400"
           placeholder="输入昵称"

@@ -3,7 +3,7 @@ import "./globals.css";
 import WsConnection from "@/components/lobby/WsConnection";
 
 export const metadata: Metadata = {
-  title: "BoardGame Lab",
+  title: "Box of Boardgames",
   description: "桌游沙盒",
 };
 
