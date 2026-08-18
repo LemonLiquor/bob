@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BAUHAUS Game Sandbox</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bauhaus-red: #E63946;
+      --bauhaus-yellow: #F4D35E;
+      --bauhaus-blue: #457B9D;
+      --bauhaus-black: #1D1D1D;
+      --bauhaus-white: #F1FAEE;
+      --bauhaus-gray: #A8DADC;
+      --glass-bg: rgba(241, 250, 238, 0.15);
+      --glass-border: rgba(29, 29, 29, 0.2);
+      --shadow: 8px 8px 0px var(--bauhaus-black);
+      --shadow-sm: 4px 4px 0px var(--bauhaus-black);
+    }
+
+    [data-theme="dark"] {
+      --bauhaus-white: #1D1D1D;
+      --bauhaus-black: #F1FAEE;
+      --glass-bg: rgba(29, 29, 29, 0.4);
+      --glass-border: rgba(241, 250, 238, 0.15);
+      --shadow: 8px 8px 0px rgba(244, 211, 94, 0.3);
+      --shadow-sm: 4px 4px 0px rgba(244, 211, 94, 0.3);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Space Grotesk', sans-serif;
+      background: var(--bauhaus-white);
+      color: var(--bauhaus-black);
+      min-height: 100vh;
+      overflow-x: hidden;
+      transition: background 0.5s ease, color 0.5s ease;
+    }
+
+    /* === GEOMETRIC BACKGROUND PATTERN === */
+    .geo-bg {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.06;
+      transition: opacity 0.5s;
+    }
+    [data-theme="dark"] .geo-bg { opacity: 0.03; }
+
+    .geo-circle {
+      position: absolute;
+      border-radius: 50%;
+      border: 3px solid var(--bauhaus-black);
+    }
+    .geo-triangle {
+      position: absolute;
+      width: 0; height: 0;
+      border-left: 40px solid transparent;
+      border-right: 40px solid transparent;
+      border-bottom: 70px solid var(--bauhaus-black);
+    }
+    .geo-rect {
+      position: absolute;
+      border: 3px solid var(--bauhaus-black);
+    }
+
+    /* === NAVIGATION === */
+    .nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 32px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 2px solid var(--glass-border);
+      transition: all 0.5s ease;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      font-size: 1.4rem;
+      letter-spacing: -0.5px;
+    }
+
+    .logo-shape {
+      width: 36px; height: 36px;
+      background: var(--bauhaus-red);
+      position: relative;
+      transform: rotate(45deg);
+      box-shadow: var(--shadow-sm);
+    }
+    .logo-shape::after {
+      content: '';
+      position: absolute;
+      top: 6px; left: 6px;
+      width: 12px; height: 12px;
+      background: var(--bauhaus-yellow);
+      border-radius: 50%;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 8px;
+    }
+
+    .nav-btn {
+      padding: 10px 24px;
+      border: 2px solid var(--bauhaus-black);
+      background: transparent;
+      color: var(--bauhaus-black);
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .nav-btn:hover, .nav-btn.active {
+      background: var(--bauhaus-black);
+      color: var(--bauhaus-white);
+      transform: translate(-2px, -2px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .nav-btn.active {
+      background: var(--bauhaus-red);
+      border-color: var(--bauhaus-red);
+    }
+
+    .theme-toggle {
+      width: 48px; height: 48px;
+      border: 2px solid var(--bauhaus-black);
+      background: var(--bauhaus-yellow);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      transition: all 0.3s ease;
+      box-shadow: var(--shadow-sm);
+    }
+    .theme-toggle:hover {
+      transform: rotate(15deg) scale(1.1);
+    }
+
+    /* === PAGE CONTAINER === */
+    .page {
+      display: none;
+      padding: 100px 32px 40px;
+      max-width: 1400px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+      animation: fadeSlideIn 0.6s ease forwards;
+    }
+    .page.active { display: block; }
+
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* === HERO SECTION === */
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: center;
+      margin-bottom: 60px;
+      min-height: 400px;
+    }
+
+    .hero-text h1 {
+      font-size: 4rem;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 20px;
+      letter-spacing: -2px;
+    }
+    .hero-text h1 span {
+      display: block;
+    }
+    .hero-text h1 .line-red { color: var(--bauhaus-red); }
+    .hero-text h1 .line-blue { color: var(--bauhaus-blue); }
+
+    .hero-text p {
+      font-size: 1.1rem;
+      line-height: 1.6;
+      margin-bottom: 30px;
+      max-width: 90%;
+      opacity: 0.85;
+    }
+
+    .cta-btn {
+      display: inline-block;
+      padding: 16px 40px;
+      background: var(--bauhaus-red);
+      color: var(--bauhaus-white);
+      border: 3px solid var(--bauhaus-black);
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      box-shadow: var(--shadow);
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    .cta-btn:hover {
+      transform: translate(-4px, -4px);
+      box-shadow: 12px 12px 0px var(--bauhaus-black);
+    }
+    .cta-btn:active {
+      transform: translate(0, 0);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .hero-visual {
+      position: relative;
+      height: 400px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hero-circle {
+      width: 280px; height: 280px;
+      border-radius: 50%;
+      background: var(--bauhaus-yellow);
+      border: 4px solid var(--bauhaus-black);
+      position: absolute;
+      box-shadow: var(--shadow);
+      animation: float 6s ease-in-out infinite;
+    }
+    .hero-triangle {
+      width: 0; height: 0;
+      border-left: 100px solid transparent;
+      border-right: 100px solid transparent;
+      border-bottom: 170px solid var(--bauhaus-blue);
+      position: absolute;
+      top: 30px; right: 40px;
+      filter: drop-shadow(var(--shadow));
+      animation: float 5s ease-in-out infinite 1s;
+    }
+    .hero-square {
+      width: 140px; height: 140px;
+      background: var(--bauhaus-red);
+      border: 3px solid var(--bauhaus-black);
+      position: absolute;
+      bottom: 40px; left: 60px;
+      box-shadow: var(--shadow);
+      animation: float 7s ease-in-out infinite 0.5s;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-15px); }
+    }
+
+    /* === ROOM LIST === */
+    .section-title {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .section-title::before {
+      content: '';
+      width: 40px; height: 40px;
+      background: var(--bauhaus-yellow);
+      border: 2px solid var(--bauhaus-black);
+      display: inline-block;
+    }
+    .section-subtitle {
+      font-size: 0.95rem;
+      opacity: 0.7;
+      margin-bottom: 30px;
+      margin-left: 52px;
+    }
+
+    .room-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 24px;
+    }
+
+    .room-card {
+      background: var(--bauhaus-white);
+      border: 3px solid var(--bauhaus-black);
+      padding: 24px;
+      position: relative;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+
+    .room-card::before {
+      content: '';
+      position: absolute;
+      top: 0; right: 0;
+      width: 60px; height: 60px;
+      background: var(--bauhaus-yellow);
+      clip-path: polygon(100% 0, 0 0, 100% 100%);
+      transition: all 0.3s ease;
+    }
+
+    .room-card:hover {
+      transform: translate(-4px, -4px);
+      box-shadow: var(--shadow);
+    }
+    .room-card:hover::before {
+      width: 80px; height: 80px;
+      background: var(--bauhaus-red);
+    }
+
+    .room-card.private::before {
+      background: var(--bauhaus-blue);
+    }
+    .room-card.private:hover::before {
+      background: var(--bauhaus-yellow);
+    }
+
+    .room-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    .room-name {
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .room-status {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border: 2px solid var(--bauhaus-black);
+      text-transform: uppercase;
+    }
+    .status-waiting { background: var(--bauhaus-yellow); }
+    .status-playing { background: var(--bauhaus-red); color: var(--bauhaus-white); }
+    .status-full { background: var(--bauhaus-gray); }
+
+    .room-meta {
+      display: flex;
+      gap: 16px;
+      font-size: 0.85rem;
+      opacity: 0.7;
+      margin-bottom: 16px;
+    }
+    .room-meta span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .room-players {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .player-avatar {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      border: 2px solid var(--bauhaus-black);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.8rem;
+      background: var(--bauhaus-blue);
+      color: var(--bauhaus-white);
+    }
+    .player-more {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      border: 2px dashed var(--bauhaus-black);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .join-btn {
+      margin-top: 16px;
+      width: 100%;
+      padding: 12px;
+      background: var(--bauhaus-black);
+      color: var(--bauhaus-white);
+      border: 2px solid var(--bauhaus-black);
+      font-family: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: all 0.2s ease;
+    }
+    .join-btn:hover {
+      background: var(--bauhaus-red);
+      border-color: var(--bauhaus-red);
+    }
+
+    /* === GAME PAGE === */
+    .game-layout {
+      display: grid;
+      grid-template-columns: 200px 1fr 200px;
+      gap: 24px;
+      height: calc(100vh - 120px);
+    }
+
+    .game-sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .sidebar-panel {
+      background: var(--bauhaus-white);
+      border: 3px solid var(--bauhaus-black);
+      padding: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .sidebar-panel h3 {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--bauhaus-black);
+    }
+
+    .game-board {
+      background: var(--bauhaus-white);
+      border: 3px solid var(--bauhaus-black);
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .board-header {
+      padding: 12px 20px;
+      background: var(--bauhaus-black);
+      color: var(--bauhaus-white);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .board-header h2 {
+      font-size: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    .turn-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+    }
+    .turn-dot {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: var(--bauhaus-yellow);
+      animation: pulse 1.5s ease infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .board-area {
+      flex: 1;
+      position: relative;
+      padding: 24px;
+      background:
+        linear-gradient(90deg, var(--bauhaus-black) 1px, transparent 1px),
+        linear-gradient(var(--bauhaus-black) 1px, transparent 1px);
+      background-size: 40px 40px;
+      background-color: var(--bauhaus-white);
+      opacity: 0.9;
+    }
+
+    /* === GAME ENTITIES === */
+    .entity-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+    }
+
+    /* CARD */
+    .card {
+      width: 100px; height: 140px;
+      background: var(--bauhaus-white);
+      border: 3px solid var(--bauhaus-black);
+      border-radius: 8px;
+      position: relative;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+    .card:hover {
+      transform: translateY(-8px) rotate(-3deg);
+      box-shadow: var(--shadow);
+    }
+    .card.flipped {
+      background: var(--bauhaus-blue);
+    }
+    .card.flipped .card-front { display: none; }
+    .card.flipped .card-back { display: flex; }
+    .card-back { display: none; }
+
+    .card-rank {
+      font-size: 1.8rem;
+      font-weight: 700;
+    }
+    .card-suit {
+      font-size: 2rem;
+      line-height: 1;
+    }
+    .card-corner {
+      position: absolute;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    .card-corner.top { top: 4px; left: 6px; }
+    .card-corner.bottom { bottom: 4px; right: 6px; transform: rotate(180deg); }
+
+    .suit-red { color: var(--bauhaus-red); }
+    .suit-black { color: var(--bauhaus-black); }
+
+    /* DICE */
+    .dice {
+      width: 80px; height: 80px;
+      background: var(--bauhaus-white);
+      border: 3px solid var(--bauhaus-black);
+      border-radius: 12px;
+      position: relative;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: var(--shadow-sm);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      padding: 8px;
+      gap: 4px;
+    }
+    .dice:hover {
+      transform: scale(1.1);
+    }
+    .dice.rolling {
+      animation: diceRoll 0.6s ease;
+    }
+    @keyframes diceRoll {
+      0% { transform: rotate(0deg) scale(1); }
+      25% { transform: rotate(90deg) scale(1.2); }
+      50% { transform: rotate(180deg) scale(0.9); }
+      75% { transform: rotate(270deg) scale(1.1); }
+      100% { transform: rotate(360deg) scale(1); }
+    }
+    .dot {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--bauhaus-black);
+      justify-self: center;
+      align-self: center;
+    }
+    [data-theme="dark"] .dot { background: var(--bauhaus-white); }
+
+    /* MEEPL */
+    .meeple {
+      width: 50px; height: 60px;
+      position: relative;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .meeple:hover {
+      transform: scale(1.15) translateY(-5px);
+    }
+    .meeple svg {
+      width: 100%; height: 100%;
+      filter: drop-shadow(var(--shadow-sm));
+    }
+
+    /* TOKEN */
+    .token {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      border: 3px solid var(--bauhaus-black);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.2rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: var(--shadow-sm);
+    }
+    .token:hover {
+      transform: scale(1.2);
+    }
+    .token-red { background: var(--bauhaus-red); color: var(--bauhaus-white); }
+    .token-yellow { background: var(--bauhaus-yellow); color: var(--bauhaus-black); }
+    .token-blue { background: var(--bauhaus-blue); color: var(--bauhaus-white); }
+
+    /* PLAYER LIST */
+    .player-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    .player-item:last-child { border-bottom: none; }
+    .player-color {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      border: 2px solid var(--bauhaus-black);
+      flex-shrink: 0;
+    }
+    .player-info { flex: 1; }
+    .player-name { font-weight: 600; font-size: 0.9rem; }
+    .player-score { font-size: 0.8rem; opacity: 0.6; }
+    .player-turn {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--bauhaus-yellow);
+      animation: pulse 1.5s ease infinite;
+    }
+
+    /* CHAT */
+    .chat-messages {
+      height: 200px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+      font-size: 0.8rem;
+    }
+    .chat-msg {
+      margin-bottom: 8px;
+      padding: 6px 8px;
+      background: rgba(0,0,0,0.05);
+      border-left: 3px solid var(--bauhaus-yellow);
+    }
+    .chat-msg b { font-weight: 600; }
+    .chat-input {
+      width: 100%;
+      padding: 8px;
+      border: 2px solid var(--bauhaus-black);
+      background: transparent;
+      font-family: inherit;
+      font-size: 0.85rem;
+      outline: none;
+    }
+    .chat-input:focus {
+      border-color: var(--bauhaus-red);
+    }
+
+    /* ACTION BAR */
+    .action-bar {
+      display: flex;
+      gap: 12px;
+      padding: 16px 20px;
+      background: var(--bauhaus-white);
+      border-top: 3px solid var(--bauhaus-black);
+    }
+    .action-btn {
+      padding: 10px 24px;
+      border: 2px solid var(--bauhaus-black);
+      background: var(--bauhaus-white);
+      color: var(--bauhaus-black);
+      font-family: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-size: 0.8rem;
+      transition: all 0.2s ease;
+    }
+    .action-btn:hover {
+      background: var(--bauhaus-black);
+      color: var(--bauhaus-white);
+      transform: translateY(-2px);
+    }
+    .action-btn.primary {
+      background: var(--bauhaus-red);
+      border-color: var(--bauhaus-red);
+      color: var(--bauhaus-white);
+    }
+    .action-btn.primary:hover {
+      background: var(--bauhaus-black);
+      border-color: var(--bauhaus-black);
+    }
+
+    /* === CREATE ROOM MODAL === */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .modal-overlay.active { display: flex; }
+
+    .modal {
+      background: var(--bauhaus-white);
+      border: 4px solid var(--bauhaus-black);
+      padding: 32px;
+      max-width: 480px;
+      width: 90%;
+      box-shadow: 16px 16px 0px var(--bauhaus-black);
+      position: relative;
+    }
+    .modal h2 {
+      font-size: 1.5rem;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    .modal-close {
+      position: absolute;
+      top: 16px; right: 16px;
+      width: 32px; height: 32px;
+      border: 2px solid var(--bauhaus-black);
+      background: var(--bauhaus-yellow);
+      cursor: pointer;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .modal-close:hover {
+      background: var(--bauhaus-red);
+      color: var(--bauhaus-white);
+      transform: rotate(90deg);
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-weight: 600;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid var(--bauhaus-black);
+      background: transparent;
+      font-family: inherit;
+      font-size: 1rem;
+      outline: none;
+    }
+    .form-group input:focus, .form-group select:focus {
+      border-color: var(--bauhaus-red);
+      background: rgba(230, 57, 70, 0.05);
+    }
+    .modal-submit {
+      width: 100%;
+      padding: 14px;
+      background: var(--bauhaus-red);
+      color: var(--bauhaus-white);
+      border: 3px solid var(--bauhaus-black);
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s;
+      margin-top: 8px;
+    }
+    .modal-submit:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: var(--shadow);
+    }
+
+    /* === RESPONSIVE === */
+    @media (max-width: 1024px) {
+      .game-layout { grid-template-columns: 1fr; }
+      .game-sidebar { flex-direction: row; flex-wrap: wrap; }
+      .sidebar-panel { flex: 1; min-width: 200px; }
+      .hero { grid-template-columns: 1fr; }
+      .hero-visual { display: none; }
+    }
+
+    @media (max-width: 640px) {
+      .nav { padding: 12px 16px; }
+      .nav-links { display: none; }
+      .page { padding: 80px 16px 24px; }
+      .hero-text h1 { font-size: 2.5rem; }
+      .room-grid { grid-template-columns: 1fr; }
+    }
+
+    /* === SCROLLBAR === */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--bauhaus-black); border-radius: 0; }
+    [data-theme="dark"] ::-webkit-scrollbar-thumb { background: var(--bauhaus-gray); }
+  </style>
+</head>
+<body>
+
+  <div class="geo-bg" id="geoBg"></div>
+
+  <!-- NAVIGATION -->
+  <nav class="nav">
+    <div class="logo">
+      <div class="logo-shape"></div>
+      <span>BAUHAUS</span>
+    </div>
+    <div class="nav-links">
+      <button class="nav-btn active" onclick="showPage('lobby')">大厅</button>
+      <button class="nav-btn" onclick="showPage('game')">游戏</button>
+      <button class="nav-btn" onclick="showPage('about')">关于</button>
+    </div>
+    <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☀</button>
+  </nav>
+
+  <!-- LOBBY PAGE -->
+  <div class="page active" id="page-lobby">
+    <div class="hero">
+      <div class="hero-text">
+        <h1>
+          <span class="line-red">FORM</span>
+          <span>FOLLOWS</span>
+          <span class="line-blue">FUN</span>
+        </h1>
+        <p>包豪斯风格的游戏沙盒。几何、原色、功能主义 —— 在这里，每一个像素都经过设计思考。</p>
+        <button class="cta-btn" onclick="openModal()">创建房间</button>
+      </div>
+      <div class="hero-visual">
+        <div class="hero-circle"></div>
+        <div class="hero-triangle"></div>
+        <div class="hero-square"></div>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 40px;">
+      <h2 class="section-title">房间列表</h2>
+      <p class="section-subtitle">当前有 6 个房间正在进行中</p>
+      <div class="room-grid" id="roomGrid"></div>
+    </div>
+  </div>
+
+  <!-- GAME PAGE -->
+  <div class="page" id="page-game">
+    <div class="game-layout">
+      <!-- LEFT SIDEBAR -->
+      <div class="game-sidebar">
+        <div class="sidebar-panel">
+          <h3>玩家</h3>
+          <div id="playerList"></div>
+        </div>
+        <div class="sidebar-panel">
+          <h3>游戏记录</h3>
+          <div style="font-size: 0.8rem; opacity: 0.7;">
+            <div style="margin-bottom: 6px;">• 玩家A 掷出了 5</div>
+            <div style="margin-bottom: 6px;">• 玩家B 抽了一张牌</div>
+            <div style="margin-bottom: 6px;">• 玩家C 移动了米宝</div>
+            <div>• 玩家A 回合结束</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GAME BOARD -->
+      <div class="game-board">
+        <div class="board-header">
+          <h2>沙盒桌游 #8842</h2>
+          <div class="turn-indicator">
+            <div class="turn-dot"></div>
+            <span>玩家A 的回合</span>
+          </div>
+        </div>
+        <div class="board-area">
+          <div class="entity-container" id="entityContainer">
+            <!-- Cards -->
+            <div class="card" onclick="flipCard(this)">
+              <div class="card-front">
+                <span class="card-corner top suit-red">A♥</span>
+                <span class="card-rank suit-red">A</span>
+                <span class="card-suit suit-red">♥</span>
+                <span class="card-corner bottom suit-red">A♥</span>
+              </div>
+              <div class="card-back">
+                <svg width="40" height="40" viewBox="0 0 40 40">
+                  <circle cx="20" cy="20" r="12" fill="none" stroke="var(--bauhaus-white)" stroke-width="2"/>
+                  <rect x="14" y="14" width="12" height="12" fill="var(--bauhaus-yellow)"/>
+                </svg>
+              </div>
+            </div>
+
+            <div class="card" onclick="flipCard(this)">
+              <div class="card-front">
+                <span class="card-corner top suit-black">K♠</span>
+                <span class="card-rank suit-black">K</span>
+                <span class="card-suit suit-black">♠</span>
+                <span class="card-corner bottom suit-black">K♠</span>
+              </div>
+              <div class="card-back">
+                <svg width="40" height="40" viewBox="0 0 40 40">
+                  <circle cx="20" cy="20" r="12" fill="none" stroke="var(--bauhaus-white)" stroke-width="2"/>
+                  <rect x="14" y="14" width="12" height="12" fill="var(--bauhaus-yellow)"/>
+                </svg>
+              </div>
+            </div>
+
+            <div class="card" onclick="flipCard(this)">
+              <div class="card-front">
+                <span class="card-corner top suit-red">Q♦</span>
+                <span class="card-rank suit-red">Q</span>
+                <span class="card-suit suit-red">♦</span>
+                <span class="card-corner bottom suit-red">Q♦</span>
+              </div>
+              <div class="card-back">
+                <svg width="40" height="40" viewBox="0 0 40 40">
+                  <circle cx="20" cy="20" r="12" fill="none" stroke="var(--bauhaus-white)" stroke-width="2"/>
+                  <rect x="14" y="14" width="12" height="12" fill="var(--bauhaus-yellow)"/>
+                </svg>
+              </div>
+            </div>
+
+            <!-- Dice -->
+            <div class="dice" id="dice1" onclick="rollDice(this)">
+              <div class="dot" style="grid-column: 2; grid-row: 2;"></div>
+            </div>
+
+            <div class="dice" id="dice2" onclick="rollDice(this)">
+              <div class="dot" style="grid-column: 1; grid-row: 1;"></div>
+              <div class="dot" style="grid-column: 3; grid-row: 3;"></div>
+            </div>
+
+            <!-- Meeples -->
+            <div class="meeple" onclick="animateMeeple(this)">
+              <svg viewBox="0 0 50 60">
+                <path d="M25 5 C32 5 37 10 37 17 C37 22 34 26 30 28 L32 55 L18 55 L20 28 C16 26 13 22 13 17 C13 10 18 5 25 5Z"
+                      fill="var(--bauhaus-red)" stroke="var(--bauhaus-black)" stroke-width="2"/>
+              </svg>
+            </div>
+
+            <div class="meeple" onclick="animateMeeple(this)">
+              <svg viewBox="0 0 50 60">
+                <path d="M25 5 C32 5 37 10 37 17 C37 22 34 26 30 28 L32 55 L18 55 L20 28 C16 26 13 22 13 17 C13 10 18 5 25 5Z"
+                      fill="var(--bauhaus-blue)" stroke="var(--bauhaus-black)" stroke-width="2"/>
+              </svg>
+            </div>
+
+            <div class="meeple" onclick="animateMeeple(this)">
+              <svg viewBox="0 0 50 60">
+                <path d="M25 5 C32 5 37 10 37 17 C37 22 34 26 30 28 L32 55 L18 55 L20 28 C16 26 13 22 13 17 C13 10 18 5 25 5Z"
+                      fill="var(--bauhaus-yellow)" stroke="var(--bauhaus-black)" stroke-width="2"/>
+              </svg>
+            </div>
+
+            <!-- Tokens -->
+            <div class="token token-red" onclick="moveToken(this)">5</div>
+            <div class="token token-yellow" onclick="moveToken(this)">10</div>
+            <div class="token token-blue" onclick="moveToken(this)">25</div>
+          </div>
+        </div>
+        <div class="action-bar">
+          <button class="action-btn" onclick="addRandomCard()">抽牌</button>
+          <button class="action-btn" onclick="rollAllDice()">掷骰</button>
+          <button class="action-btn primary" onclick="endTurn()">结束回合</button>
+        </div>
+      </div>
+
+      <!-- RIGHT SIDEBAR -->
+      <div class="game-sidebar">
+        <div class="sidebar-panel">
+          <h3>聊天</h3>
+          <div class="chat-messages" id="chatMessages">
+            <div class="chat-msg"><b>系统:</b> 游戏开始！</div>
+            <div class="chat-msg"><b>玩家A:</b> 大家好</div>
+            <div class="chat-msg"><b>玩家B:</b> 准备好了</div>
+          </div>
+          <input type="text" class="chat-input" placeholder="输入消息..." onkeypress="sendChat(event, this)">
+        </div>
+        <div class="sidebar-panel">
+          <h3>设置</h3>
+          <div style="font-size: 0.85rem;">
+            <div style="margin-bottom: 8px; display:flex; justify-content:space-between;">
+              <span>音效</span>
+              <span style="font-weight:700;">开</span>
+            </div>
+            <div style="margin-bottom: 8px; display:flex; justify-content:space-between;">
+              <span>动画</span>
+              <span style="font-weight:700;">开</span>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span>网格</span>
+              <span style="font-weight:700;">开</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ABOUT PAGE -->
+  <div class="page" id="page-about">
+    <div style="max-width: 800px; margin: 0 auto;">
+      <h1 style="font-size: 3rem; margin-bottom: 30px; line-height: 1;">
+        <span style="color: var(--bauhaus-red);">LESS</span> IS<br>MORE FUN
+      </h1>
+      <div style="border-left: 4px solid var(--bauhaus-yellow); padding-left: 24px; margin-bottom: 40px;">
+        <p style="font-size: 1.1rem; line-height: 1.8; margin-bottom: 16px;">
+          这个沙盒游戏平台的设计灵感源自包豪斯学派（1919-1933）的设计哲学。我们相信，好的游戏界面和好的建筑一样，应该遵循"形式追随功能"的原则。
+        </p>
+        <p style="font-size: 1.1rem; line-height: 1.8; margin-bottom: 16px;">
+          原色（红、黄、蓝）、基础几何形状（圆、三角、方）、以及清晰的网格系统 —— 这些元素不仅构成了视觉语言，也定义了交互逻辑。
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 40px;">
+        <div style="border: 3px solid var(--bauhaus-black); padding: 24px; text-align: center; box-shadow: var(--shadow-sm);">
+          <div style="width: 60px; height: 60px; background: var(--bauhaus-red); border-radius: 50%; margin: 0 auto 16px; border: 2px solid var(--bauhaus-black);"></div>
+          <h3 style="font-size: 1rem; margin-bottom: 8px;">几何实体</h3>
+          <p style="font-size: 0.85rem; opacity: 0.7;">卡牌、骰子、米宝 —— 每个元素都是可交互的几何体</p>
+        </div>
+        <div style="border: 3px solid var(--bauhaus-black); padding: 24px; text-align: center; box-shadow: var(--shadow-sm);">
+          <div style="width: 0; height: 0; border-left: 30px solid transparent; border-right: 30px solid transparent; border-bottom: 52px solid var(--bauhaus-yellow); margin: 0 auto 16px; filter: drop-shadow(var(--shadow-sm));"></div>
+          <h3 style="font-size: 1rem; margin-bottom: 8px;">渐进交互</h3>
+          <p style="font-size: 0.85rem; opacity: 0.7;">悬停、点击、拖拽 —— 每个动作都有清晰的视觉反馈</p>
+        </div>
+        <div style="border: 3px solid var(--bauhaus-black); padding: 24px; text-align: center; box-shadow: var(--shadow-sm);">
+          <div style="width: 60px; height: 60px; background: var(--bauhaus-blue); margin: 0 auto 16px; border: 2px solid var(--bauhaus-black);"></div>
+          <h3 style="font-size: 1rem; margin-bottom: 8px;">明暗模式</h3>
+          <p style="font-size: 0.85rem; opacity: 0.7;">包豪斯不仅属于白天，暗色模式同样遵循设计原则</p>
+        </div>
+      </div>
+
+      <div style="border: 3px solid var(--bauhaus-black); padding: 24px; background: var(--bauhaus-white); box-shadow: var(--shadow);">
+        <h3 style="margin-bottom: 12px; text-transform: uppercase; letter-spacing: 2px; font-size: 0.9rem;">设计决策说明</h3>
+        <div style="font-size: 0.9rem; line-height: 1.8; opacity: 0.85;">
+          <p style="margin-bottom: 10px;"><b style="color: var(--bauhaus-red);">毛玻璃效果：</b>在导航栏谨慎使用，提供层次区分但不破坏包豪斯的硬朗感。不用于主要卡片或游戏区域，避免与几何实体竞争视觉焦点。</p>
+          <p style="margin-bottom: 10px;"><b style="color: var(--bauhaus-yellow);">阴影系统：</b>使用硬阴影（非模糊）模拟印刷品的立体感，这是向包豪斯海报设计致敬。</p>
+          <p><b style="color: var(--bauhaus-blue);">动画原则：</b>所有动画都是功能性反馈 —— 卡牌翻转显示状态，骰子滚动表示随机，米宝跳跃表示选中。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE ROOM MODAL -->
+  <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="closeModal()">×</button>
+      <h2>创建房间</h2>
+      <div class="form-group">
+        <label>房间名称</label>
+        <input type="text" placeholder="输入房间名称..." id="roomNameInput">
+      </div>
+      <div class="form-group">
+        <label>游戏类型</label>
+        <select id="gameTypeInput">
+          <option>沙盒模式</option>
+          <option>卡牌对战</option>
+          <option>骰子冒险</option>
+          <option>策略棋盘</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>最大玩家数</label>
+        <select id="maxPlayersInput">
+          <option>2</option>
+          <option>3</option>
+          <option selected>4</option>
+          <option>6</option>
+          <option>8</option>
+        </select>
+      </div>
+      <button class="modal-submit" onclick="createRoom()">创建</button>
+    </div>
+  </div>
+
+  <script>
+    // === ROOM DATA ===
+    const rooms = [
+      { name: "几何狂想曲", type: "沙盒模式", players: 3, max: 4, status: "waiting", avatars: ["A","B","C"] },
+      { name: "原色对决", type: "卡牌对战", players: 2, max: 2, status: "playing", avatars: ["X","Y"] },
+      { name: "骰子工坊", type: "骰子冒险", players: 1, max: 6, status: "waiting", avatars: ["M"] },
+      { name: "包豪斯之夜", type: "策略棋盘", players: 4, max: 4, status: "full", avatars: ["P","Q","R","S"] },
+      { name: "形式追随功能", type: "沙盒模式", players: 2, max: 4, status: "waiting", avatars: ["J","K"] },
+      { name: "红黄蓝", type: "卡牌对战", players: 3, max: 4, status: "playing", avatars: ["D","E","F"] },
+    ];
+
+    const players = [
+      { name: "玩家A", score: 120, color: "var(--bauhaus-red)", isTurn: true },
+      { name: "玩家B", score: 95, color: "var(--bauhaus-blue)", isTurn: false },
+      { name: "玩家C", score: 88, color: "var(--bauhaus-yellow)", isTurn: false },
+      { name: "玩家D", score: 76, color: "var(--bauhaus-gray)", isTurn: false },
+    ];
+
+    // === INIT ===
+    function init() {
+      renderRooms();
+      renderPlayers();
+      generateGeoBg();
+    }
+
+    // === GEO BACKGROUND ===
+    function generateGeoBg() {
+      const bg = document.getElementById('geoBg');
+      const shapes = ['circle', 'triangle', 'rect'];
+      for (let i = 0; i < 15; i++) {
+        const shape = document.createElement('div');
+        const type = shapes[Math.floor(Math.random() * shapes.length)];
+        shape.className = `geo-${type}`;
+        shape.style.left = Math.random() * 100 + '%';
+        shape.style.top = Math.random() * 100 + '%';
+        shape.style.transform = `rotate(${Math.random() * 360}deg) scale(${0.5 + Math.random()})`;
+        if (type === 'circle') {
+          shape.style.width = (30 + Math.random() * 60) + 'px';
+          shape.style.height = shape.style.width;
+        } else if (type === 'rect') {
+          shape.style.width = (30 + Math.random() * 50) + 'px';
+          shape.style.height = (20 + Math.random() * 40) + 'px';
+        }
+        bg.appendChild(shape);
+      }
+    }
+
+    // === PAGE NAVIGATION ===
+    function showPage(pageName) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('page-' + pageName).classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    // === THEME TOGGLE ===
+    function toggleTheme() {
+      const html = document.documentElement;
+      const btn = document.getElementById('themeBtn');
+      if (html.getAttribute('data-theme') === 'dark') {
+        html.removeAttribute('data-theme');
+        btn.textContent = '☀';
+      } else {
+        html.setAttribute('data-theme', 'dark');
+        btn.textContent = '☾';
+      }
+    }
+
+    // === RENDER ROOMS ===
+    function renderRooms() {
+      const grid = document.getElementById('roomGrid');
+      grid.innerHTML = rooms.map(r => `
+        <div class="room-card ${r.status === 'full' ? 'private' : ''}" onclick="joinRoom('${r.name}')">
+          <div class="room-header">
+            <div class="room-name">${r.name}</div>
+            <div class="room-status status-${r.status}">
+              ${r.status === 'waiting' ? '等待中' : r.status === 'playing' ? '游戏中' : '已满'}
+            </div>
+          </div>
+          <div class="room-meta">
+            <span>🎮 ${r.type}</span>
+            <span>👥 ${r.players}/${r.max}</span>
+          </div>
+          <div class="room-players">
+            ${r.avatars.map(a => `<div class="player-avatar">${a}</div>`).join('')}
+            ${r.players < r.max ? `<div class="player-more">+${r.max - r.players}</div>` : ''}
+          </div>
+          <button class="join-btn" onclick="event.stopPropagation(); joinRoom('${r.name}')">
+            ${r.status === 'full' ? '观战' : '加入'}
+          </button>
+        </div>
+      `).join('');
+    }
+
+    // === RENDER PLAYERS ===
+    function renderPlayers() {
+      const list = document.getElementById('playerList');
+      list.innerHTML = players.map(p => `
+        <div class="player-item">
+          <div class="player-color" style="background: ${p.color};"></div>
+          <div class="player-info">
+            <div class="player-name">${p.name}</div>
+            <div class="player-score">${p.score} 分</div>
+          </div>
+          ${p.isTurn ? '<div class="player-turn"></div>' : ''}
+        </div>
+      `).join('');
+    }
+
+    // === MODAL ===
+    function openModal() {
+      document.getElementById('modalOverlay').classList.add('active');
+    }
+    function closeModal(e) {
+      if (!e || e.target === document.getElementById('modalOverlay')) {
+        document.getElementById('modalOverlay').classList.remove('active');
+      }
+    }
+    function createRoom() {
+      const name = document.getElementById('roomNameInput').value || '新房间';
+      const type = document.getElementById('gameTypeInput').value;
+      const max = parseInt(document.getElementById('maxPlayersInput').value);
+      rooms.unshift({ name, type, players: 1, max, status: 'waiting', avatars: ['你'] });
+      renderRooms();
+      closeModal();
+      document.getElementById('roomNameInput').value = '';
+    }
+
+    function joinRoom(name) {
+      showPage('game');
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.nav-btn')[1].classList.add('active');
+    }
+
+    // === GAME INTERACTIONS ===
+    function flipCard(card) {
+      card.classList.toggle('flipped');
+    }
+
+    function rollDice(dice) {
+      if (dice.classList.contains('rolling')) return;
+      dice.classList.add('rolling');
+      setTimeout(() => {
+        dice.classList.remove('rolling');
+        const num = Math.floor(Math.random() * 6) + 1;
+        renderDice(dice, num);
+      }, 600);
+    }
+
+    function renderDice(dice, num) {
+      const dots = {
+        1: [[2,2]],
+        2: [[1,1],[3,3]],
+        3: [[1,1],[2,2],[3,3]],
+        4: [[1,1],[1,3],[3,1],[3,3]],
+        5: [[1,1],[1,3],[2,2],[3,1],[3,3]],
+        6: [[1,1],[1,3],[2,1],[2,3],[3,1],[3,3]]
+      };
+      dice.innerHTML = dots[num].map(([c,r]) =>
+        `<div class="dot" style="grid-column: ${c}; grid-row: ${r};"></div>`
+      ).join('');
+    }
+
+    function rollAllDice() {
+      document.querySelectorAll('.dice').forEach(d => rollDice(d));
+    }
+
+    function animateMeeple(meeple) {
+      meeple.style.transform = 'scale(1.3) translateY(-20px) rotate(10deg)';
+      setTimeout(() => {
+        meeple.style.transform = '';
+      }, 400);
+    }
+
+    function moveToken(token) {
+      token.style.transform = 'scale(1.3) rotate(360deg)';
+      setTimeout(() => {
+        token.style.transform = '';
+      }, 500);
+    }
+
+    function addRandomCard() {
+      const suits = ['♥','♠','♦','♣'];
+      const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+      const suit = suits[Math.floor(Math.random() * suits.length)];
+      const rank = ranks[Math.floor(Math.random() * ranks.length)];
+      const isRed = suit === '♥' || suit === '♦';
+      const colorClass = isRed ? 'suit-red' : 'suit-black';
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.onclick = function() { flipCard(this); };
+      card.innerHTML = `
+        <div class="card-front">
+          <span class="card-corner top ${colorClass}">${rank}${suit}</span>
+          <span class="card-rank ${colorClass}">${rank}</span>
+          <span class="card-suit ${colorClass}">${suit}</span>
+          <span class="card-corner bottom ${colorClass}">${rank}${suit}</span>
+        </div>
+        <div class="card-back">
+          <svg width="40" height="40" viewBox="0 0 40 40">
+            <circle cx="20" cy="20" r="12" fill="none" stroke="var(--bauhaus-white)" stroke-width="2"/>
+            <rect x="14" y="14" width="12" height="12" fill="var(--bauhaus-yellow)"/>
+          </svg>
+        </div>
+      `;
+      card.style.animation = 'fadeSlideIn 0.4s ease';
+      document.getElementById('entityContainer').appendChild(card);
+    }
+
+    function endTurn() {
+      const current = players.findIndex(p => p.isTurn);
+      players[current].isTurn = false;
+      players[(current + 1) % players.length].isTurn = true;
+      renderPlayers();
+      addChat('系统', `轮到 ${players[(current + 1) % players.length].name} 了`);
+    }
+
+    function sendChat(e, input) {
+      if (e.key === 'Enter' && input.value.trim()) {
+        addChat('你', input.value.trim());
+        input.value = '';
+      }
+    }
+
+    function addChat(who, msg) {
+      const container = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = 'chat-msg';
+      div.innerHTML = `<b>${who}:</b> ${msg}`;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // === INIT ===
+    init();
+  </script>
+</body>
+</html>
