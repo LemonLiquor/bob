@@ -204,6 +204,15 @@ body {
     box-shadow: var(--shadow-sm-val);
   }
 
+  /* --- 桌面（Bauhaus board-area：米白底 + 40px 黑色网格线） --- */
+  .board-area {
+    background:
+      linear-gradient(90deg, var(--ink) 1px, transparent 1px),
+      linear-gradient(var(--ink) 1px, transparent 1px);
+    background-size: 40px 40px;
+    background-color: var(--surface);
+  }
+
   /* --- 虚线放置区（牌堆 / 手牌区 / 导入入口） --- */
   .dashed-zone {
     border: 3px dashed var(--ink);

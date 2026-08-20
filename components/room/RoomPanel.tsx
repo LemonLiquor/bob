@@ -90,7 +90,8 @@ export default function RoomPanel() {
 
   return (
     <div className="panel-pop fixed top-3 right-3 z-50 p-3 min-w-[200px]">
-      <p className="text-sm font-mono text-secondary mb-2">房间: {codeRef.current}</p>
+      {/* sidebar-panel h3 风格：标题下方 2px 黑色横线 */}
+      <p className="text-sm font-mono text-secondary mb-2 pb-2 border-b-2 border-ink">房间: {codeRef.current}</p>
 
       <p className="text-[10px] text-muted mt-1 mb-0.5">座位</p>
       <ul>
