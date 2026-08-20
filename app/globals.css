@@ -224,6 +224,12 @@ body {
     background: var(--highlight-bg);
     box-shadow: var(--shadow-sm-val);
   }
+  /* 选中态：原黑虚线框直接变红（不叠加新框） */
+  .dashed-zone-active {
+    border: 3px dashed var(--primary);
+    background: transparent;
+    transition: all 0.2s ease;
+  }
 
   /* --- 角标 / 标签 --- */
   .tag-pop {

@@ -34,11 +34,10 @@ export default function Pile({ pile, cards, onShuffle }: PileProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [isHovered, pile.id, onShuffle]);
 
-  const overClass = isOver
-    ? "dashed-zone-over"
-    : "dashed-zone";
+  // hover / 拖拽悬停：黑虚线框变红（不叠加 ring / 实线框）
+  const overClass = isOver || isHovered ? "dashed-zone-active" : "dashed-zone";
 
-  const containerClass = `absolute rounded-lg transition-[border,background] duration-150 ${overClass} ${isHovered ? "ring-2 ring-highlight" : ""}`;
+  const containerClass = `absolute rounded-lg transition-[border,background] duration-150 ${overClass}`;
 
   const containerStyle: React.CSSProperties = {
     left: pile.x,
