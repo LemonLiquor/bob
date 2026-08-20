@@ -22,7 +22,7 @@ export default function OtherHandBar({ seat }: { seat: Seat }) {
         <p className="text-secondary">{seat.label}</p>
         <p className="text-muted">
           {seat.playerName}
-          {seat.handZone.cardIds.length > 0 ? ` · ${seat.handZone.cardIds.length} 张` : ""}
+          {seat.handZone.entityIds.length > 0 ? ` · ${seat.handZone.entityIds.length} 张` : ""}
         </p>
       </div>
     </div>

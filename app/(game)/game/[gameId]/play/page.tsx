@@ -9,7 +9,7 @@ import { getStatus, onStatusChange } from "@/lib/multiplayer/connection";
 import { send, onMessage } from "@/lib/multiplayer/transport";
 import { setAssets } from "@/lib/assets/cache";
 import { buildGame } from "@/lib/engine/build-game";
-import type { CardAsset } from "@/lib/engine/types";
+import type { GameAssets } from "@/lib/engine/types";
 import type { GameState } from "@/lib/engine";
 import type { ServerMessage } from "@/lib/multiplayer/protocol";
 
@@ -29,7 +29,7 @@ export default function GamePlayPage({
   const [resetKey, setResetKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const assetsRef = useRef<CardAsset[]>([]);
+  const assetsRef = useRef<GameAssets>({ sprites: [], prefabs: [] });
 
   const fetchGame = useCallback(() => {
     send({ type: "get_game", gameId });

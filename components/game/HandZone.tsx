@@ -3,10 +3,10 @@
 import { useDroppable } from "@dnd-kit/core";
 import { SPREAD_GAP } from "@/lib/engine";
 import Card from "./Card";
-import type { CardState, Seat } from "@/lib/engine";
+import type { EntityState, Seat } from "@/lib/engine";
 
 /** 我的手牌区（屏幕底部 spread 展开；屏幕 UI 组件，不在桌面坐标系） */
-export default function HandZone({ seat, cards }: { seat: Seat; cards: CardState[] }) {
+export default function HandZone({ seat, cards }: { seat: Seat; cards: EntityState[] }) {
   const { isOver, setNodeRef } = useDroppable({ id: `hand-${seat.id}` });
 
   return (

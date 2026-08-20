@@ -1,14 +1,14 @@
 "use client";
 
-import { CardState } from "@/lib/engine";
-import { getCardAsset } from "@/lib/assets/cache";
+import type { EntityState } from "@/lib/engine";
+import { getPrefabFaces } from "@/lib/assets/cache";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { useHoverable } from "@/lib/engine/card-action";
 import CardBack from "./CardBack";
 
 interface CardProps {
-  card: CardState;
+  card: EntityState;
   children?: React.ReactNode;
   draggable?: boolean;
 }
@@ -24,10 +24,10 @@ export default function Card({ card, children, draggable = false }: CardProps) {
   const { isHovered, hoverProps } = useHoverable({ id: card.id });
 
   const faceClass = card.faceUp ? "bg-white text-black" : "bg-[#1e3a5f] text-white";
-  // 一级查表：card.id → 资产（进房时一次性入内存缓存），faceUp 决定正/背
-  const asset = getCardAsset(card.id);
-  const frontSrc = card.faceUp ? asset?.frontUrl : undefined;
-  const backSrc = card.faceUp ? undefined : asset?.backUrl;
+  // 一级查表：prefabId → [正面, 背面]（进房时一次性入缓存），faceUp 决定取哪个面
+  const faces = getPrefabFaces(card.prefabId);
+  const frontSrc = card.faceUp ? faces?.[0] : undefined;
+  const backSrc = card.faceUp ? undefined : faces?.[1];
   const shadowClass = isDragging
     ? "shadow-[0_8px_24px_rgba(0,0,0,0.25)]"
     : "shadow-[0_2px_8px_rgba(0,0,0,0.15)]";

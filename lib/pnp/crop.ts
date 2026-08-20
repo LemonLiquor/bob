@@ -2,7 +2,7 @@
 // PnP 裁切 — 网格裁切（手动边距/间隔参数）+ 双面打印镜像配对 + 资产生成
 // ============================================================
 
-import type { CardAsset } from "../engine/types";
+import type { GameAssets, Prefab, Sprite } from "../engine/types";
 import type { UploadGameMeta } from "../multiplayer/protocol";
 
 /** 裁切配置（单位：canvas 像素，pdf.js scale 2 渲染） */
@@ -81,27 +81,33 @@ export interface BuildPnpMultiParams {
 }
 
 /**
- * 生成 PnP 卡牌资产（内存生成，不落盘）——多页对合成一个桌游：
- * - 全部页对的卡合并，id 跨页连续编号：{ "c-0", "c-1", ... }
- * - 镜像配对在客户端完成：每页对内 正面格子 k ↔ 背面格子 mirrorBackIndex(k, cols)
- * - 只产 meta + 卡牌资产，初始状态由服务端派生
+ * 生成 PnP 资产（内存生成，不落盘）——多页对合成一个桌游（编译级适配）：
+ * - 每张卡正面 → 一个 sprite；有背面（镜像配对）→ 各自一个背面 sprite
+ * - 每张卡 → 一个 prefab（faces 引用对应 sprite；无背面 → back 空串，渲染回退默认卡背）
+ * - 只产 meta + 资产，初始状态由客户端 buildGame 派生
+ * - 注意：导入侧重做（每页对 → 多牌堆/共用背面）留待后续需求
  */
-export async function buildPnpAssetsMulti(params: BuildPnpMultiParams): Promise<{ meta: UploadGameMeta; assets: CardAsset[] }> {
+export async function buildPnpAssetsMulti(params: BuildPnpMultiParams): Promise<{ meta: UploadGameMeta; assets: GameAssets }> {
   const { name, cols, pagePairs } = params;
   const gameId = `pnp-${Date.now()}`;
-  const assets: CardAsset[] = [];
+  const sprites: Sprite[] = [];
+  const prefabs: Prefab[] = [];
   let n = 0;
 
   for (const pair of pagePairs) {
     pair.frontDataUrls.forEach((frontUrl, k) => {
-      const asset: CardAsset = { id: `c-${n}`, frontUrl };
-      if (pair.backDataUrls) {
-        asset.backUrl = pair.backDataUrls[mirrorBackIndex(k, cols)];
+      sprites.push({ id: `sprite-f${n}`, url: frontUrl });
+      const backUrl = pair.backDataUrls ? pair.backDataUrls[mirrorBackIndex(k, cols)] : undefined;
+      if (backUrl) {
+        sprites.push({ id: `sprite-b${n}`, url: backUrl });
       }
-      assets.push(asset);
+      prefabs.push({
+        id: `prefab-c${n}`,
+        faces: { front: `sprite-f${n}`, back: backUrl ? `sprite-b${n}` : "" },
+      });
       n++;
     });
   }
 
-  return { meta: { id: gameId, name, icon: "🖼️" }, assets };
+  return { meta: { id: gameId, name, icon: "🖼️" }, assets: { sprites, prefabs } };
 }

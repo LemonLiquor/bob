@@ -2,7 +2,7 @@
 // 共享消息协议 — 客户端和服务端共用
 // ============================================================
 
-import type { CardAsset, GameAction, GameState, Seat } from "../engine/types";
+import type { GameAssets, GameAction, GameState, Seat } from "../engine/types";
 
 export type { GameAction }; // 由 engine/types 定义，此处 re-export 保持 API 不变
 
@@ -19,7 +19,7 @@ export type ClientMessage =
   | { type: "join_room"; code: string; playerId: string; playerName: string }
   | { type: "leave_room" }
   | { type: "list_rooms" }
-  | { type: "upload_game"; meta: UploadGameMeta; assets: CardAsset[] }
+  | { type: "upload_game"; meta: UploadGameMeta; assets: GameAssets }
   | { type: "list_games" }
   | { type: "get_game"; gameId: string }
   | { type: "game_action"; action: GameAction }
@@ -46,9 +46,9 @@ export type ServerMessage =
   | { type: "game_uploaded"; gameId: string }
   | { type: "game_list"; games: GameInfo[] }
   // 客户端负责 buildGame（含居中），room_created 不再携带 initialState
-  | { type: "game_data"; gameId: string; assets: CardAsset[] }
-  | { type: "room_created"; code: string; playerId: string; creatorId: string; players: PlayerInfo[]; assets: CardAsset[] }
-  | { type: "room_joined"; code: string; playerId: string; creatorId: string; players: PlayerInfo[]; gameState: GameState; assets: CardAsset[] }
+  | { type: "game_data"; gameId: string; assets: GameAssets }
+  | { type: "room_created"; code: string; playerId: string; creatorId: string; players: PlayerInfo[]; assets: GameAssets }
+  | { type: "room_joined"; code: string; playerId: string; creatorId: string; players: PlayerInfo[]; gameState: GameState; assets: GameAssets }
   | { type: "player_joined"; player: PlayerInfo; seats: Seat[] }
   | { type: "player_left"; playerId: string; players: PlayerInfo[]; seats: Seat[] }
   | { type: "state_sync"; state: GameState }

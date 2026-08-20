@@ -48,7 +48,7 @@ export function handleMessage(
         playerId: parsed.playerId,
         creatorId: room.creatorId,
         players: roomManager.getPlayers(room),
-        assets: gameLibrary.getGame(room.gameId ?? "")?.assets ?? [],
+        assets: gameLibrary.getGame(room.gameId ?? "")?.assets ?? { sprites: [], prefabs: [] },
       });
       break;
     }
@@ -68,7 +68,7 @@ export function handleMessage(
         creatorId: room.creatorId,
         players: roomManager.getPlayers(room),
         gameState: room.gameState,
-        assets: gameLibrary.getGame(room.gameId ?? "")?.assets ?? [],
+        assets: gameLibrary.getGame(room.gameId ?? "")?.assets ?? { sprites: [], prefabs: [] },
       });
       if (!isReconnect) {
         broadcast(room, {

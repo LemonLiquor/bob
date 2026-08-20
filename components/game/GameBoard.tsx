@@ -35,7 +35,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
 
   const [internalState, setInternalState] = useState<GameState>(() => {
     const initial = propState ?? initialState ?? {
-      cards: [],
+      entities: [],
       piles: [],
       seats: [createSeat()],
     };
@@ -74,9 +74,9 @@ export default function GameBoard({ gameState: propState, onAction, initialState
       if (!mySeatId) return;
       // 已在手牌区 → 跳过（防重复）
       const mySeat = gameState.seats.find((s) => s.id === mySeatId);
-      if (!mySeat || mySeat.handZone.cardIds.includes(id)) return;
+      if (!mySeat || mySeat.handZone.entityIds.includes(id)) return;
       // 牌必须存在（moveCardToHand 内部也会校验，双保险）
-      if (!gameState.cards.some((c) => c.id === id)) return;
+      if (!gameState.entities.some((e) => e.id === id)) return;
       dispatch({ type: "move_to_hand", cardId: id, seatId: mySeatId });
     },
     [mySeatId, gameState, dispatch],
@@ -144,12 +144,12 @@ export default function GameBoard({ gameState: propState, onAction, initialState
   // 自由牌 = 不在任何 pile / 手牌区
   const inContainer = useMemo(() => {
     const set = new Set<string>();
-    for (const p of gameState.piles) for (const id of p.cardIds) set.add(id);
-    for (const s of gameState.seats) for (const id of s.handZone.cardIds) set.add(id);
+    for (const p of gameState.piles) for (const id of p.entityIds) set.add(id);
+    for (const s of gameState.seats) for (const id of s.handZone.entityIds) set.add(id);
     return set;
   }, [gameState]);
 
-  const freeCards = gameState.cards.filter((c) => !inContainer.has(c.id));
+  const freeCards = gameState.entities.filter((e) => !inContainer.has(e.id));
 
   return (
     <main
@@ -181,14 +181,14 @@ export default function GameBoard({ gameState: propState, onAction, initialState
             <Pile
               key={pile.id}
               pile={pile}
-              cards={findCards(gameState, pile.cardIds)}
+              cards={findCards(gameState, pile.entityIds)}
               onShuffle={handleShufflePile}
             />
           ))}
 
           {/* 自己的手牌区（屏幕底部，spread 展开） */}
           {mySeat && (
-            <HandZone seat={mySeat} cards={findCards(gameState, mySeat.handZone.cardIds)} />
+            <HandZone seat={mySeat} cards={findCards(gameState, mySeat.handZone.entityIds)} />
           )}
 
           {/* 其他玩家的手牌区（屏幕顶部，折叠条） */}

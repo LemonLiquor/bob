@@ -7,7 +7,7 @@ import { sessionStore } from "@/lib/multiplayer/session";
 import { setAssets } from "@/lib/assets/cache";
 import { buildGame } from "@/lib/engine/build-game";
 import type { GameAction, ServerMessage } from "@/lib/multiplayer/protocol";
-import type { CardAsset, GameState } from "@/lib/engine";
+import type { GameAssets, GameState } from "@/lib/engine";
 import GameBoard from "@/components/game/GameBoard";
 import GameControlPanel from "@/components/game/GameControlPanel";
 import RoomPanel from "@/components/room/RoomPanel";
@@ -24,7 +24,7 @@ export default function RoomPage() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [roomCode, setRoomCode] = useState("");
   const [isCreator, setIsCreator] = useState(false);
-  const assetsRef = useRef<{ assets: CardAsset[]; creatorId: string; playerId: string } | null>(null);
+  const assetsRef = useRef<{ assets: GameAssets; creatorId: string; playerId: string } | null>(null);
 
   // 挂载时从 sessionStore 取初始状态（含资产），并监听 state_sync
   useEffect(() => {
@@ -54,7 +54,7 @@ export default function RoomPage() {
         // 竞态兜底：创建者尚未 update_game_state 时服务端是空占位 state，
         // 本地 buildGame 兜底显示（不发送，等创建者广播修正）
         const isEmpty =
-          msg.gameState.cards.length === 0 &&
+          msg.gameState.entities.length === 0 &&
           msg.gameState.piles.length === 0 &&
           msg.gameState.seats.length === 0;
         setGameState(isEmpty ? buildGame(msg.assets, { width: window.innerWidth, height: window.innerHeight }) : msg.gameState);

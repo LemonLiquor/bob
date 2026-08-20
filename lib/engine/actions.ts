@@ -1,16 +1,17 @@
-import type { CardState, GameState, Pile } from "./types";
+import type { EntityState, GameState, Pile } from "./types";
 import { CARD_WIDTH, CARD_HEIGHT, OVERLAP_DISTANCE, TABLE_CENTER } from "./layout";
 
 // ============================================================
 // S9 引擎 — 自由坐标 + Pile。纯函数，不可变更新，零 UI 依赖
+// 注：动作字段仍叫 cardId（协议兼容），操作对象是实例 id（EntityState.id）
 // ============================================================
 
-function findCard(state: GameState, cardId: string): CardState | undefined {
-  return state.cards.find((c) => c.id === cardId);
+function findCard(state: GameState, cardId: string): EntityState | undefined {
+  return state.entities.find((e) => e.id === cardId);
 }
 
 function maxZIndex(state: GameState): number {
-  return state.cards.reduce((max, c) => Math.max(max, c.zIndex), 0);
+  return state.entities.reduce((max, e) => Math.max(max, e.zIndex), 0);
 }
 
 /** 计算卡牌中心点 */
@@ -27,20 +28,20 @@ function distance(
 
 /** 从所有容器（piles / handZones）中移除 cardId。不可变更新 */
 function removeFromContainers(state: GameState, cardId: string): GameState {
-  const inPile = state.piles.some((p) => p.cardIds.includes(cardId));
-  const inHand = state.seats.some((s) => s.handZone.cardIds.includes(cardId));
+  const inPile = state.piles.some((p) => p.entityIds.includes(cardId));
+  const inHand = state.seats.some((s) => s.handZone.entityIds.includes(cardId));
   if (!inPile && !inHand) return state;
 
   return {
     ...state,
     piles: state.piles.map((p) =>
-      p.cardIds.includes(cardId)
-        ? { ...p, cardIds: p.cardIds.filter((id) => id !== cardId) }
+      p.entityIds.includes(cardId)
+        ? { ...p, entityIds: p.entityIds.filter((id) => id !== cardId) }
         : p,
     ),
     seats: state.seats.map((s) =>
-      s.handZone.cardIds.includes(cardId)
-        ? { ...s, handZone: { cardIds: s.handZone.cardIds.filter((id) => id !== cardId) } }
+      s.handZone.entityIds.includes(cardId)
+        ? { ...s, handZone: { entityIds: s.handZone.entityIds.filter((id) => id !== cardId) } }
         : s,
     ),
   };
@@ -51,10 +52,10 @@ function removeFromContainers(state: GameState, cardId: string): GameState {
  * 所有移出牌的路径都必须走这里，否则会残留空 pile。
  */
 function removeCard(state: GameState, cardId: string): GameState {
-  const pile = state.piles.find((p) => p.cardIds.includes(cardId));
+  const pile = state.piles.find((p) => p.entityIds.includes(cardId));
   const next = removeFromContainers(state, cardId);
   if (pile) {
-    const remaining = pile.cardIds.filter((id) => id !== cardId);
+    const remaining = pile.entityIds.filter((id) => id !== cardId);
     if (remaining.length <= 1) {
       return { ...next, piles: next.piles.filter((p) => p.id !== pile.id) };
     }
@@ -64,7 +65,7 @@ function removeCard(state: GameState, cardId: string): GameState {
 
 export interface OverlapTarget {
   pile?: Pile;
-  card?: CardState;
+  card?: EntityState;
 }
 
 /**
@@ -84,10 +85,10 @@ export function findOverlap(state: GameState, x: number, y: number, excludeId?: 
 
   // 2. 自由牌（不在任何 pile / handZone 中）
   const inContainer = (id: string) =>
-    state.piles.some((p) => p.cardIds.includes(id)) ||
-    state.seats.some((s) => s.handZone.cardIds.includes(id));
+    state.piles.some((p) => p.entityIds.includes(id)) ||
+    state.seats.some((s) => s.handZone.entityIds.includes(id));
 
-  for (const card of state.cards) {
+  for (const card of state.entities) {
     if (card.id === excludeId) continue;
     if (inContainer(card.id)) continue;
     const cc = centerOf(card.x, card.y);
@@ -113,7 +114,7 @@ function placeAt(state: GameState, cardId: string, x: number, y: number): GameSt
     return {
       ...state,
       piles: state.piles.map((p) =>
-        p.id === target.pile!.id ? { ...p, cardIds: [...p.cardIds, cardId] } : p,
+        p.id === target.pile!.id ? { ...p, entityIds: [...p.entityIds, cardId] } : p,
       ),
     };
   }
@@ -122,7 +123,7 @@ function placeAt(state: GameState, cardId: string, x: number, y: number): GameSt
   if (target.card) {
     const pile: Pile = {
       id: `pile-${Date.now()}`,
-      cardIds: [target.card.id, cardId],
+      entityIds: [target.card.id, cardId],
       x,
       y,
     };
@@ -133,7 +134,7 @@ function placeAt(state: GameState, cardId: string, x: number, y: number): GameSt
   const z = maxZIndex(state) + 1;
   return {
     ...state,
-    cards: state.cards.map((c) => (c.id === cardId ? { ...c, x, y, zIndex: z } : c)),
+    entities: state.entities.map((e) => (e.id === cardId ? { ...e, x, y, zIndex: z } : e)),
   };
 }
 
@@ -158,7 +159,7 @@ export function moveCardToHand(state: GameState, cardId: string, seatId: string)
   return {
     ...removed,
     seats: removed.seats.map((s) =>
-      s.id === seatId ? { ...s, handZone: { cardIds: [...s.handZone.cardIds, cardId] } } : s,
+      s.id === seatId ? { ...s, handZone: { entityIds: [...s.handZone.entityIds, cardId] } } : s,
     ),
   };
 }
@@ -180,13 +181,13 @@ export function moveCardToPile(state: GameState, cardId: string, pileId: string)
     return {
       ...removed,
       piles: removed.piles.map((p) =>
-        p.id === pileId ? { ...p, cardIds: [...p.cardIds, cardId] } : p,
+        p.id === pileId ? { ...p, entityIds: [...p.entityIds, cardId] } : p,
       ),
     };
   }
 
   // 目标 pile 因移出而解散（拖牌放回自己所在的 ≤2 张 pile）→ 重建单张 pile
-  return { ...removed, piles: [...removed.piles, { ...pile, cardIds: [cardId] }] };
+  return { ...removed, piles: [...removed.piles, { ...pile, entityIds: [cardId] }] };
 }
 
 /**
@@ -199,9 +200,9 @@ export function moveCardFromPile(state: GameState, cardId: string, x: number, y:
 /** 打乱指定 pile 中的卡牌顺序（Fisher-Yates）。不可变更新 */
 export function shufflePile(state: GameState, pileId: string): GameState {
   const pile = state.piles.find((p) => p.id === pileId);
-  if (!pile || pile.cardIds.length <= 1) return state;
+  if (!pile || pile.entityIds.length <= 1) return state;
 
-  const shuffled = [...pile.cardIds];
+  const shuffled = [...pile.entityIds];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
@@ -209,22 +210,22 @@ export function shufflePile(state: GameState, pileId: string): GameState {
 
   return {
     ...state,
-    piles: state.piles.map((p) => (p.id === pileId ? { ...p, cardIds: shuffled } : p)),
+    piles: state.piles.map((p) => (p.id === pileId ? { ...p, entityIds: shuffled } : p)),
   };
 }
 
 /** 翻转指定卡牌的朝向。不可变更新 */
 export function flipCard(state: GameState, cardId: string): GameState {
-  const cardIndex = state.cards.findIndex((c) => c.id === cardId);
+  const cardIndex = state.entities.findIndex((e) => e.id === cardId);
   if (cardIndex === -1) return state;
 
-  const card = state.cards[cardIndex];
+  const card = state.entities[cardIndex];
   return {
     ...state,
-    cards: [
-      ...state.cards.slice(0, cardIndex),
+    entities: [
+      ...state.entities.slice(0, cardIndex),
       { ...card, faceUp: !card.faceUp },
-      ...state.cards.slice(cardIndex + 1),
+      ...state.entities.slice(cardIndex + 1),
     ],
   };
 }
@@ -234,11 +235,11 @@ export function flipCard(state: GameState, cardId: string): GameState {
  */
 export function dropHandToTable(state: GameState, seatId: string): GameState {
   const seat = state.seats.find((s) => s.id === seatId);
-  if (!seat || seat.handZone.cardIds.length === 0) return state;
+  if (!seat || seat.handZone.entityIds.length === 0) return state;
 
   let z = maxZIndex(state);
   const dropMap = new Map<string, { x: number; y: number; zIndex: number }>();
-  for (const id of seat.handZone.cardIds) {
+  for (const id of seat.handZone.entityIds) {
     z += 1;
     dropMap.set(id, {
       x: TABLE_CENTER.x + Math.round((Math.random() - 0.5) * 40),
@@ -249,12 +250,12 @@ export function dropHandToTable(state: GameState, seatId: string): GameState {
 
   return {
     ...state,
-    cards: state.cards.map((c) => {
-      const drop = dropMap.get(c.id);
-      return drop ? { ...c, ...drop } : c;
+    entities: state.entities.map((e) => {
+      const drop = dropMap.get(e.id);
+      return drop ? { ...e, ...drop } : e;
     }),
     seats: state.seats.map((s) =>
-      s.id === seatId ? { ...s, handZone: { cardIds: [] } } : s,
+      s.id === seatId ? { ...s, handZone: { entityIds: [] } } : s,
     ),
   };
 }

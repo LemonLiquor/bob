@@ -47,7 +47,7 @@ export class RoomManager {
     const room: Room = {
       code,
       players: new Map([[ws, player]]),
-      gameState: { cards: [], piles: [], seats: [] },
+      gameState: { entities: [], piles: [], seats: [] },
       creatorId: playerId,
       gameId: def.meta.id,
       gameName: def.meta.name,

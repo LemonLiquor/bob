@@ -1,5 +1,5 @@
 import type { PlayerInfo } from "./protocol";
-import type { CardAsset, GameState } from "../engine/types";
+import type { GameAssets, GameState } from "../engine/types";
 
 // ============================================================
 // SessionStore — 房间创建/加入 → 房间页传递初始状态
@@ -12,7 +12,7 @@ interface Session {
   creatorId: string; // 房主：ESC 面板重新开始按钮权限
   players: PlayerInfo[];
   gameState: GameState;
-  assets: CardAsset[];
+  assets: GameAssets;
 }
 
 let current: Session | null = null;

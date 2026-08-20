@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Pile as PileType, CardState } from "@/lib/engine";
+import type { Pile as PileType, EntityState } from "@/lib/engine";
 import { useDroppable } from "@dnd-kit/core";
 import { stackLayout } from "@/lib/engine/layout";
 import Card from "./Card";
 
 interface PileProps {
   pile: PileType;
-  cards: CardState[];  // 按从下到上顺序
+  cards: EntityState[];  // 按从下到上顺序
   onShuffle: (pileId: string) => void;
 }
 

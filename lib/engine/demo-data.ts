@@ -7,7 +7,7 @@ import type { Seat as SeatType, SeatTemplate } from "./types";
 /** 默认座位模板：每个玩家一个手牌区（无坐标，屏幕 UI 组件） */
 export const DEFAULT_SEAT_TEMPLATE: SeatTemplate = {
   label: "座位",
-  handZone: { cardIds: [] },
+  handZone: { entityIds: [] },
 };
 
 /** 根据模板创建新座位。handZone 无坐标 */
@@ -17,7 +17,7 @@ export function createSeatFromTemplate(template: SeatTemplate): SeatType {
     id: `seat-${ts}`,
     index: ts,
     label: template.label,
-    handZone: { cardIds: [...template.handZone.cardIds] },
+    handZone: { entityIds: [...template.handZone.entityIds] },
   };
 }
 

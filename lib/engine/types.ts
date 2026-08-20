@@ -1,20 +1,38 @@
 /**
- * 卡牌资产（静态层：进房时一次性下发，永不参与状态同步）。
- * 一张卡 = 一个对象：id 与 GameState.cards[].id 对应，正反图直接是 dataURL。
- * 渲染：getCardAsset(card.id) → faceUp ? frontUrl : backUrl
+ * 引擎类型 — 三层结构（资源 / 模板 / 实例）
+ * - 资源层（静态）：Sprite（纯图）+ Prefab（模板，faces 引用 sprite），进房时一次性下发，永不参与状态同步
+ * - 状态层（动态）：EntityState（实例，引用 prefab），随 state_sync 高频同步
+ * - 渲染：getPrefabFaces(entity.prefabId) → [正面url, 背面url] → faceUp ? [0] : [1]
  */
-export interface CardAsset {
-  id: string;        // 卡 id（与 CardState.id 对应）
-  frontUrl: string;  // 正面图片 dataURL
-  backUrl?: string;  // 背面图片 dataURL，缺省用默认卡背
+
+/** 纯图片资源，无任何业务语义 */
+export interface Sprite {
+  id: string;   // "sprite-f0"
+  url: string;  // dataURL
+}
+
+/** 实体模板（预制体）：完整定义，自带全部面。引擎式 Prefab，无 kind（类型由内容决定） */
+export interface Prefab {
+  id: string;          // "prefab-c0"（游戏内唯一）
+  faces: {
+    front: string;     // 正面 sprite id
+    back: string;      // 背面 sprite id（空串 = 无背面，渲染回退默认卡背）
+  };
+}
+
+/** 桌游资产集合：纯美术资源（图片表 + 模板表） */
+export interface GameAssets {
+  sprites: Sprite[];
+  prefabs: Prefab[];
 }
 
 /**
- * 卡牌动态状态（GameState 的一部分，随 state_sync 高频同步）。
- * 纯逻辑状态，不含任何资源引用。
+ * 实例（场上实体）：纯逻辑状态，引用 prefab，不含任何资源引用。
+ * 渲染：getPrefabFaces(entity.prefabId) → faceUp ? 正面 : 背面
  */
-export interface CardState {
-  id: string;
+export interface EntityState {
+  id: string;         // 实例 id "inst-0"（与 GameState.entities[].id 对应）
+  prefabId: string;   // 引用 Prefab.id
   faceUp: boolean;
   x: number;          // 自由像素坐标（桌面坐标系）
   y: number;
@@ -23,14 +41,14 @@ export interface CardState {
 
 export interface Pile {
   id: string;          // 自动生成 "pile-{ts}"
-  cardIds: string[];   // 从下到上
+  entityIds: string[]; // 从下到上
   x: number;
   y: number;
 }
 
 /** 手牌区 — 无坐标：屏幕 UI 组件，不在桌面坐标系 */
 export interface HandZone {
-  cardIds: string[];
+  entityIds: string[];
 }
 
 export interface Seat {
@@ -43,7 +61,7 @@ export interface Seat {
 }
 
 export interface GameState {
-  cards: CardState[];
+  entities: EntityState[];
   piles: Pile[];           // 公共牌堆
   seats: Seat[];           // 座位列表
 }
@@ -57,7 +75,7 @@ export interface GameMeta {
 /** 新增玩家时的座位模板。手牌区无坐标（屏幕 UI 组件） */
 export interface SeatTemplate {
   label: string;
-  handZone: { cardIds: string[] };
+  handZone: { entityIds: string[] };
 }
 
 /** 游戏动作判别联合（传输层 re-export：lib/multiplayer/protocol.ts） */
@@ -66,4 +84,3 @@ export type GameAction =
   | { type: "move_to_hand"; cardId: string; seatId: string } // seatId 任意（沙盒）
   | { type: "flip_card"; cardId: string }
   | { type: "shuffle_pile"; pileId: string };
-

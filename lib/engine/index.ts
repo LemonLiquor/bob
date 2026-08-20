@@ -1,4 +1,4 @@
-export type { CardAsset, CardState, Pile, HandZone, Seat, GameState, GameMeta, SeatTemplate, GameAction } from "./types";
+export type { Sprite, Prefab, GameAssets, EntityState, Pile, HandZone, Seat, GameState, GameMeta, SeatTemplate, GameAction } from "./types";
 export { applyAction, findCards } from "./reducers";
 export {
   moveCard, moveCardToHand, moveCardFromHand, moveCardToPile, moveCardFromPile,
