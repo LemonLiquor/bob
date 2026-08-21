@@ -1,7 +1,7 @@
 # 临时需求文档：导入页重构（资源工厂 + 卡组组装 + 无座初始状态）
 
 > ⚠️ 临时文件：完成需求后删除。正式记录落盘到 docs/architecture.md + docs/notes/implemented.md。
-> 验收方式约定：控制台打印 json（url 字段截断显示为 `url.slice(0,60)+…(长度)`，避免 dataURL 刷屏），打印点保留到 S8 清理。
+> 验收方式约定：控制台打印 json（url 字段截断显示为 `url.slice(0,60)+…(长度)`，避免 dataURL 刷屏），打印点保留到 S7 清理。
 
 ## 背景与目标
 
@@ -18,6 +18,7 @@
 - sprite id 命名 `sprite-{n}`（全局递增，不再分 f/b）；prefab 仍 `prefab-{n}`
 - 卡组是**页面内临时结构**（不进协议/存储）：`{ cards: { frontSpriteId, backSpriteId | "" }[] }`，一卡组 → 一个 Pile
 - 未进卡组的 sprite 也全量上传（sprite 表全量，prefabs 只引用部分）
+- **initialState 坐标由 Lab 自定义**：生成时 entities（x/y/zIndex）与 piles（x/y）坐标默认全 0；上传前进入 Lab 沙盒拖拽调整，保存后坐标写回 initialState；运行时**不再重算坐标**（不做居中），创建房间/试玩直接读 initialState，`buildGame` 删除
 - **座位是运行时概念，不进存档**：存档 `seats: []`；创建房间时由服务端补 1 个默认空座（复用 `createSeat`，行为对齐现有 buildGame）
 
 ## 交互设计（导入页）
@@ -30,11 +31,11 @@
    - 卡组面板内每卡一行 `[正面缩略图][背面缩略图][✕]`；点击任一缩略图进入"替换模式"（该格闪烁）→ 点击图片池任意图完成替换；点空白取消
    - 可建多个卡组（各生成一个牌堆）；卡组可删除
 5. **页对预设**（快捷选项，复用 `mirrorBackIndex`，复杂度低）：「自动正反交替组卡」→ 页面按 (1,2),(3,4) 配对，每对生成一个卡组（正面 = 奇数页切图、背面 = 偶数页镜像图）
-6. **坐标占位**：上传的 initialState 中牌堆水平排列占位（第 i 个 `x = i*(CARD_WIDTH+24)`，`y = 0`，常量取 `lib/engine/layout.ts`）；实际显示坐标由客户端运行时居中
+6. **坐标由 Lab 自定义**：生成 json 时 entities/piles 坐标默认 0；上传前进入 Lab 沙盒（全屏，无座）拖拽移动卡牌与牌堆，保存后坐标写回 initialState；运行时不再重算（创建房间/试玩直接使用；多牌堆由玩家在 Lab 里摆好）
 
 ## 实施步骤（按用户可验收的功能分步）
 
-依赖：1 → 2 → 3 → 4 → 5；6 → 7 → 8。
+依赖：1 → 2 → 3 → 4a → 4b → 4c → 5；6 → 7。
 
 ---
 
@@ -73,18 +74,64 @@
 
 ---
 
-### S4：上传（meta + assets + 无座 initialState，控制台打印完整 payload json）
+### S4a：生成桌游数据 json（上传前预览）
+
+**能力（改完后）**：填好游戏名、组好卡组后，点「生成桌游数据」→ 页面组装完整桌游包（meta + assets + 无座 initialState，`buildGameFromDecks` 摊平卡组）→ **页面上展示完整 json 文本 + 控制台打印**，供上传前检查；确认无误后再点「上传桌游」（S4b）。参数/卡组变更后可重新生成（重新生成会更新 id）。
 
 **改**：
-- `lib/pnp/crop.ts`：新增 `Deck` 类型与 `buildGameFromDecks(decks, sprites) → { prefabs, entities, piles }`（prefabs `prefab-{n}`、entities `inst-{n}`、piles 每卡组一个 `pile-{ts}` 占位坐标 `x = i*(CARD_WIDTH+24), y = 0`）
-- `lib/multiplayer/protocol.ts`：`upload_game` 增加 `initialState: GameState`
-- `server/game-library.ts`：`SavedGame` 增加 `initialState`；`loadAll` 缺失则跳过并 warn（旧 json 不再加载，文件保留）
-- `server/handlers.ts`：`upload_game` 保存 initialState
-- `app/(main)/import/page.tsx`：`handleImport`——sprites 池（全量）+ `buildGameFromDecks` → `{ meta, assets, initialState }` → 上传前 `console.log("upload:", payload)`；上传按钮启用
+- `lib/pnp/crop.ts`：
+  - 新增 `Deck` 类型：`{ cards: { frontSpriteId: string; backSpriteId: string }[] }`（`backSpriteId` 空串 = 默认卡背）
+  - 新增纯函数 `buildGameFromDecks(decks: Deck[], sprites: Sprite[]) → { prefabs, entities, piles }`：
+    - prefabs：每卡一个，id `prefab-{n}` 连续；`faces = { front: frontSpriteId, back: backSpriteId }`
+    - entities：id `inst-{n}` 连续；`prefabId` 对应；`faceUp: false`；坐标字段存在且为 0（`x: 0, y: 0, zIndex: 0`）
+    - piles：每卡组一个，id `pile-{ts}`；`entityIds` 按卡组内顺序；坐标字段存在且为 0（`x: 0, y: 0`）
+  - 删除旧 `buildPnpAssetsMulti` / `PagePairData` / `BuildPnpMultiParams`（镜像 `mirrorBackIndex` 保留，S5 页对预设用）
+- `app/(main)/import/page.tsx`：
+  - 加回**游戏名输入框**（参数区，默认文件名去 .pdf）
+  - 新增状态 `pendingUpload: { meta, assets, initialState } | null`
+  - 新增「生成桌游数据」按钮：`handleGenerate`——sprites = 图片池全量；`{ prefabs, entities, piles } = buildGameFromDecks(decks, sprites)`；`initialState = { entities, piles, seats: [] }`；`meta = { id: "pnp-"+Date.now(), name, icon: "🖼️" }` → 存 `pendingUpload` → 页面 JSON 展示区（等宽字体、可滚动）显示完整 json + `console.log("generated:", payload)`（url 截断）
+  - 按钮禁用条件：无文件 / 无切图 / 游戏名为空 / 生成中
 
 **验收**：
-- 点上传 → 控制台打印完整 payload json：meta + assets（sprites 全量、prefabs 引用）+ initialState（`seats: []`、piles 每卡组一个、水平占位坐标）
-- `server/data/games/<id>.json` 落盘同结构；服务端重启日志旧 json 显示 skip；广场列表只显示新游戏（旧游戏不加载）
+- 点「生成桌游数据」→ 页面 json 区与控制台显示完整 payload：meta（id `pnp-{ts}`）+ assets（sprites 全量、prefabs 引用正确）+ initialState（`seats: []`、piles 每卡组一个、**entities 与 piles 坐标字段均为 0**）
+- 0 个卡组也能生成（纯资源库：prefabs/piles 空）
+- 改名 / 改卡组后重新生成 → json 更新（新 id）
+
+---
+
+### S4b：Lab 沙盒调整初始布局
+
+**能力（改完后）**：生成 json 后，点「进入 Lab 调整」→ 页面切换为**全屏沙盒**（复用 GameBoard 受控模式，无座，不涉及任何服务端）→ 拖拽自由移动卡牌与牌堆、翻面/洗牌/抓手牌（沙盒语义，随意玩）→ 点「保存并返回」→ 把调整后的 entities/piles 坐标写回 initialState（seats 保持 `[]`）→ 回导入页，json 区显示更新后的坐标 → 可再次进 Lab 继续调。
+
+**改**：`app/(main)/import/page.tsx`：
+- 新增视图切换状态 `view: "import" | "lab"`；lab 视图全屏渲染（`h-screen`，参考游戏页布局）
+- lab 视图：`<GameBoard gameState={labState} onAction={(a) => setLabState(prev => applyAction(prev, a))} />`（复用引擎 `applyAction`，本地状态）；顶部悬浮栏：标题「Lab — 调整初始布局」+ 「保存并返回」按钮
+- 进 lab：`setLabState(pendingUpload.initialState)`；保存返回：`initialState = { ...labState, seats: [] }` 写回 `pendingUpload` → 回 import 视图
+- 生成新 json 或重新生成后，lab 状态随之重置（以最新 pendingUpload 为准）
+
+**验收**：
+- 点「进入 Lab 调整」→ 全屏沙盒，牌堆/卡牌按 json 坐标显示
+- 拖拽移动卡牌与牌堆、翻面等交互正常（复用 GameBoard 能力）
+- 点「保存并返回」→ 导入页 json 区坐标已更新为拖拽后的值；`seats` 仍为 `[]`
+- 再次进入 Lab → 显示上次保存的布局；上传前可反复调整
+
+---
+
+### S4c：上传桌游 json
+
+**能力（改完后）**：生成并检查无误后，点「上传桌游」→ 把 `pendingUpload` 发送给 WS 服务端 → 落盘 `server/data/games/<id>.json` → 自动跳转游戏广场并刷新列表。
+
+**改**：
+- `lib/multiplayer/protocol.ts`：`ClientMessage.upload_game` 增加 `initialState: GameState`
+- `server/game-library.ts`：`SavedGame` 增加 `initialState: GameState`；`loadAll` 校验缺失 initialState 的文件跳过并 warn（旧 json 不再加载，文件保留）
+- `server/handlers.ts`：`upload_game` 分支把 `parsed.initialState` 一并存入 SavedGame
+- `app/(main)/import/page.tsx`：
+  - 新增「上传桌游」按钮（`pendingUpload` 为 null 时禁用）：`send({ type: "upload_game", ...pendingUpload })`
+  - 监听 `game_uploaded` → 跳转 `/games`（列表自动刷新）；监听 `error` → 提示上传失败
+**验收**：
+- 点上传 → `server/data/games/<id>.json` 落盘，结构与生成的 json 一致（含 Lab 调整后的坐标）
+- 重启 WS 服务端 → 日志旧 json 显示 skip；广场列表只显示新游戏（旧游戏不加载）
+- 上传成功自动跳转 /games，列表出现新游戏
 
 ---
 
@@ -96,38 +143,36 @@
 
 ---
 
-### S6：试玩与开房显示固化的 initialState（视觉验收）
+### S6：消费端直接使用 initialState（删除 buildGame，不重算坐标）
+
+**能力（改完后）**：试玩 / 创建房间 / 加入房间 / 重新开始全部直接使用服务端下发的 initialState（坐标 0 原样显示，不做居中）；`buildGame` 从代码库消失。
 
 **改**：
-- `lib/engine/build-game.ts`：新增 `recenterInitialState(state, boardSize)`——多牌堆整体水平排列后居中（第 i 个 `x = 中心-总宽/2 + i*(CARD_WIDTH+24)`，y 垂直居中）；`buildGame` 暂保留
-- `lib/multiplayer/protocol.ts`：`game_data` / `room_created` / `room_joined` 增加 `initialState`
-- `server/room-manager.ts`：`createRoom` 改为 `{ ...structuredClone(initialState), seats: [createSeat()] }`
-- `server/handlers.ts`：三个分支下发 initialState（深拷贝）
-- `app/(main)/games/page.tsx`：`room_created` 分支 `recenterInitialState(msg.initialState, 视口)` → session + `update_game_state` 广播；删除 `buildGame` 引用
-- `app/(game)/game/[gameId]/play/page.tsx`：`game_data` 用 `msg.initialState` + recenter；重新开始 = 重新居中；删除 `buildGame` 引用
+- `lib/multiplayer/protocol.ts`：
+  - `game_data` 增加 `initialState: GameState`（无座存档版）
+  - `room_created` 增加 `initialState`（无座存档版，供重新开始用）与 `gameState`（服务端补座后的初始状态，供显示）
+  - `room_joined` 不变（已带 gameState）
+- `server/room-manager.ts`：`createRoom` 改为 `gameState = { ...structuredClone(initialState), seats: [createSeat()] }`（防多房间共享引用 + 创建者可落座）
+- `server/handlers.ts`：`create_room` 下发 `initialState` + `gameState`（补座版深拷贝）；`get_game` 下发 `initialState`
+- `app/(main)/games/page.tsx`：`room_created` 分支直接用 `msg.gameState` 存 session 并跳转（**删除 buildGame 与 update_game_state**）
+- `app/(game)/game/[gameId]/play/page.tsx`：`game_data` 分支用 `msg.initialState` 直接作初始状态（无座，GameBoard 自动补虚拟座位）；重新开始 = 直接回 initialState；删除 `buildGame` 引用
+- `app/(game)/room/[code]/page.tsx`：进房存 initialState 到 ref（session 取）；删除竞态兜底逻辑（服务端 gameState 恒非空）；房主重新开始 = `{ ...initialState, seats: 当前 seats 保留实例+归属、仅清空 handZone.entityIds }` → `update_game_state` 广播
+- 删除 `lib/engine/build-game.ts`（buildGame 无调用方）
 
 **验收**：
-- 试玩：进页即见牌堆组整体居中于视口；无座自动补虚拟座位可抓牌；ESC 重新开始回初始布局
-- 开房：创建者进房牌堆组居中、有一个默认空座可占（与现状一致）；加入者经 state_sync 位置一致
-- 广场旧游戏消失（服务端不加载）
+- 试玩：进页即见牌堆在桌面原点（坐标 0 原样），无座自动补虚拟座位可抓牌；ESC 重新开始回 initialState
+- 开房：创建者进房有一个默认空座可占，牌堆在桌面原点；加入者经 state_sync 一致
+- 重新开始：座位实例与归属全保留、手牌清空、牌堆回 initialState
+- `grep -r "buildGame" app/ lib/` 无结果；`tsc --noEmit` 通过
+- 旧数据游戏从广场消失（服务端不加载）
 
 ---
 
-### S7：多人重新开始（座位保留、手牌清空）
+### S7：清理
 
-**改**：`app/(game)/room/[code]/page.tsx`：
-- 进房 initialState 存 ref；竞态兜底（创建者尚未广播）改为本地 recenter 显示、不发送
-- 房主重新开始：`{ ...recenterInitialState(initialState, 视口), seats: 当前 seats 保留实例+归属、仅清空 handZone.entityIds }` → `update_game_state` 广播
+**改**：移除验收用 console.log（sprites/decks/upload 打印）；更新 `docs/architecture.md`"初始状态构建"条目（buildGame 客户端执行 → 导入固化无座 initialState 坐标 0）；新增 `docs/notes/implemented.md` 条目；删除本临时文件
 
-**验收**：多人开房 → 玩家入座 → 房主 ESC 重新开始 → 座位实例与归属全保留（玩家无需重新占座）、手牌清空、牌堆回初始居中布局
-
----
-
-### S8：清理
-
-**改**：删除 `lib/engine/build-game.ts` 的 `buildGame`（已无调用方）；移除验收用 console.log；更新 `docs/architecture.md`"初始状态构建"条目；新增 `docs/notes/implemented.md` 条目；删除本临时文件
-
-**验收**：`grep -r "buildGame" app/ lib/` 无调用残留；`tsc --noEmit` 通过；文档已更新；`docs/TEMP-import-rework.md` 已删除
+**验收**：`tsc --noEmit` 通过；文档已更新；`docs/TEMP-import-rework.md` 已删除；`grep -r "buildGame" app/ lib/ server/` 无结果
 
 ## 关联
 
