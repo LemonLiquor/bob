@@ -86,11 +86,16 @@ export default function Pile({ pile, cards, onShuffle, shiftHeld }: PileProps) {
         </div>
       ))}
 
-      {/* hover 顶部提示：整体移动 */}
+      {/* hover 顶部提示（左对齐，底边贴在容器顶框上方 4px，新增行自动向上扩展）：整体移动 + 洗牌 */}
       {isHovered && count > 1 && (
-        <span className="absolute -top-7 left-1/2 -translate-x-1/2 text-[11px] text-muted bg-card/90 rounded px-1.5 py-0.5 shadow whitespace-nowrap pointer-events-none">
-          Shift+拖 移动整堆
-        </span>
+        <div className="absolute left-0 bottom-[calc(100%+4px)] flex flex-col items-start gap-0.5 pointer-events-none">
+          <span className="text-[11px] text-muted bg-card/90 rounded px-1.5 py-0.5 shadow whitespace-nowrap">
+            Shift+拖 移动整堆
+          </span>
+          <span className="text-[11px] text-muted bg-card/90 rounded px-1.5 py-0.5 shadow whitespace-nowrap">
+            R 洗牌
+          </span>
+        </div>
       )}
 
       {/* 张数角标 */}
@@ -98,19 +103,6 @@ export default function Pile({ pile, cards, onShuffle, shiftHeld }: PileProps) {
         {count}
       </div>
 
-      {/* hover 提示：洗牌 */}
-      {isHovered && count > 1 && (
-        <button
-          className="absolute -bottom-7 left-1/2 -translate-x-1/2 text-[11px] text-muted hover:text-ink bg-card/90 rounded px-1.5 py-0.5 shadow cursor-pointer whitespace-nowrap"
-          onClick={(e) => {
-            e.stopPropagation();
-            onShuffle(pile.id);
-          }}
-          title="洗牌（或 hover 按 R）"
-        >
-          [洗牌 R]
-        </button>
-      )}
     </div>
   );
 }
