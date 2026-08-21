@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getPageCount, renderPageToCanvas } from "@/lib/pnp/pdf";
-import { cropGrid, buildGameFromDecks, mirrorBackIndex, DEFAULT_CROP, type CropConfig, type Deck } from "@/lib/pnp/crop";
+import { cropGrid, buildGameFromDecks, mirrorBackIndex, toCircular, DEFAULT_CROP, type CropConfig, type Deck } from "@/lib/pnp/crop";
 import type { GameAction, GameState, Sprite } from "@/lib/engine/types";
 import { applyAction } from "@/lib/engine";
 import { setAssets } from "@/lib/assets/cache";
@@ -14,6 +14,7 @@ import GameBoard from "@/components/game/GameBoard";
 import PagePicker from "@/components/import/PagePicker";
 import CropParams from "@/components/import/CropParams";
 import PagePreviews from "@/components/import/PagePreviews";
+import EntityPanel from "@/components/import/EntityPanel";
 import SpritePool from "@/components/import/SpritePool";
 import DeckBuilder, { type Picker } from "@/components/import/DeckBuilder";
 import GeneratePanel, { type PendingUpload } from "@/components/import/GeneratePanel";
@@ -21,7 +22,7 @@ import type { PreviewData } from "@/components/import/GridPreview";
 
 // ============================================================
 // PnP PDF 导入页 — 状态与逻辑中枢，UI 拆分至 components/import/
-// 流程：选 PDF → 页面多选 → 切割参数 → 预览 → 图片池 → 卡组组装
+// 流程：选 PDF → 页面多选 → 切割参数 → 预览 → 实体定义 → 图片池 → 实体组组装
 //       → 生成桌游 → Lab 沙盒摆布局 → 保存并上传（meta+assets+无座 initialState）
 // ============================================================
 
@@ -39,6 +40,11 @@ export default function ImportPage() {
   const [previews, setPreviews] = useState<(PreviewData | null)[]>([]);
   const [decks, setDecks] = useState<Deck[]>([]);
   const [picker, setPicker] = useState<Picker>(null);
+  // 实体定义面板状态：形状（默认矩形）+ 渲染大小（默认未设置 = 卡牌 120×168）
+  const [shapes, setShapes] = useState<Map<string, "rect" | "circle">>(new Map());
+  const [sizes, setSizes] = useState<Map<string, { width: number; height: number }>>(new Map());
+  const [shapeBusy, setShapeBusy] = useState<Set<string>>(new Set());
+  const originalUrlsRef = useRef<Map<string, string>>(new Map()); // 原始矩形 dataURL（恢复用）
   const loadToken = useRef(0); // 防止换文件后旧预览乱序覆盖
   const [view, setView] = useState<"import" | "lab">("import");
   const [labState, setLabState] = useState<GameState | null>(null);
@@ -95,6 +101,10 @@ export default function ImportPage() {
       setDecks([]);
       setPicker(null);
       setPendingUpload(null);
+      setShapes(new Map());
+      setSizes(new Map());
+      setShapeBusy(new Set());
+      originalUrlsRef.current = new Map();
       setSelectedPages(new Set(Array.from({ length: count }, (_, i) => i + 1)));
       setPreviews(new Array(count).fill(null));
 
@@ -147,6 +157,12 @@ export default function ImportPage() {
       }
       setSprites(list);
       setSelected(new Set());
+      setDecks([]);
+      setPicker(null);
+      setShapes(new Map());
+      setSizes(new Map());
+      setShapeBusy(new Set());
+      originalUrlsRef.current = new Map();
     } catch (err) {
       setError(`切割失败: ${(err as Error).message}`);
     } finally {
@@ -193,6 +209,54 @@ export default function ImportPage() {
     setLabState((prev) => (prev ? applyAction(prev, action) : prev));
   }
 
+  /** S1 实体定义：切换单图形状（矩形 ↔ 圆形）。圆形 = canvas 遮罩生成透明 PNG，原始暂存可恢复 */
+  async function handleToggleShape(id: string) {
+    const current = shapes.get(id) ?? "rect";
+    if (current === "rect") {
+      const sprite = sprites.find((s) => s.id === id);
+      if (!sprite) return;
+      originalUrlsRef.current.set(id, sprite.url);
+      setShapeBusy((prev) => new Set(prev).add(id));
+      try {
+        const circularUrl = await toCircular(sprite.url);
+        setSprites((prev) => prev.map((s) => (s.id === id ? { ...s, url: circularUrl } : s)));
+        setShapes((prev) => new Map(prev).set(id, "circle"));
+      } catch {
+        /* 处理失败保持原样 */
+      } finally {
+        setShapeBusy((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    } else {
+      // 恢复矩形（原始 dataURL 或直接标回 rect）
+      const original = originalUrlsRef.current.get(id);
+      if (original) {
+        setSprites((prev) => prev.map((s) => (s.id === id ? { ...s, url: original } : s)));
+      }
+      setShapes((prev) => new Map(prev).set(id, "rect"));
+    }
+  }
+
+  /** S1 实体定义：批量切换形状（串行处理） */
+  async function handleBatchShape(ids: string[], shape: "rect" | "circle") {
+    for (const id of ids) {
+      if ((shapes.get(id) ?? "rect") === shape) continue;
+      await handleToggleShape(id);
+    }
+  }
+
+  /** S1 实体定义：批量设置渲染大小 */
+  function handleBatchSize(ids: string[], size: { width: number; height: number }) {
+    setSizes((prev) => {
+      const next = new Map(prev);
+      for (const id of ids) next.set(id, size);
+      return next;
+    });
+  }
+
   /** 点击切换图片选中态 */
   function toggleSprite(id: string) {
     setSelected((prev) => {
@@ -206,7 +270,7 @@ export default function ImportPage() {
   /** 图片池点击分发：选背面模式 / 替换模式 / 普通选中切换 */
   function handleSpriteClick(id: string) {
     if (picker?.type === "back") {
-      // 设为卡组所有卡的共用背面
+      // 设为实体组所有实体的共用背面
       const { deckIdx } = picker;
       setDecks((prev) => {
         const next = prev.map((d, i) =>
@@ -233,7 +297,7 @@ export default function ImportPage() {
     toggleSprite(id);
   }
 
-  /** 新建卡组：当前选中的图片 → 卡正面列表，随后进入选背面模式 */
+  /** 新建实体组：当前选中的图片 → 正面列表，随后进入选背面模式 */
   function handleAddDeck() {
     if (selected.size === 0) return;
     const newDeck: Deck = { cards: Array.from(selected).map((id) => ({ frontSpriteId: id, backSpriteId: "" })) };
@@ -257,7 +321,17 @@ export default function ImportPage() {
     });
   }
 
-  /** S5 页对预设：勾选页按顺序两两配对，全部合入**一个卡组**
+  /** 正反面一样：组内每个实体 back = 自己的正面图（token/筹码场景） */
+  function handleSameFaces(deckIdx: number) {
+    setDecks((prev) =>
+      prev.map((d, i) =>
+        i === deckIdx ? { ...d, cards: d.cards.map((c) => ({ ...c, backSpriteId: c.frontSpriteId })) } : d,
+      ),
+    );
+    setPicker(null);
+  }
+
+  /** S5 页对预设：勾选页按顺序两两配对，全部合入**一个实体组**
    *  （正面 = 前页切图，背面 = 后页镜像图；奇数页最后一对无背面 = 默认卡背）
    *  前提：图片池为当前勾选页按序切割的结果（第 i 个勾选页的图在 [i*n, (i+1)*n)，n = 行×列） */
   function handleAutoPairDecks() {
@@ -362,6 +436,17 @@ export default function ImportPage() {
             crop={crop}
           />
           {sprites.length > 0 && (
+            <EntityPanel
+              sprites={sprites}
+              shapes={shapes}
+              sizes={sizes}
+              busyIds={shapeBusy}
+              onToggleShape={handleToggleShape}
+              onBatchShape={handleBatchShape}
+              onBatchSize={handleBatchSize}
+            />
+          )}
+          {sprites.length > 0 && (
             <SpritePool
               sprites={sprites}
               selected={selected}
@@ -380,6 +465,7 @@ export default function ImportPage() {
             onRemoveCard={handleRemoveCard}
             onRemoveDeck={handleRemoveDeck}
             onSetPicker={setPicker}
+            onSameFaces={handleSameFaces}
           />
         </>
       )}

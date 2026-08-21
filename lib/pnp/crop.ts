@@ -78,6 +78,30 @@ export interface Deck {
 }
 
 /**
+ * 圆形遮罩：dataURL → 透明背景圆形 PNG（取图时定形状）。
+ * 画布 = min(宽,高) 正方形，图居中裁切，圆外透明。
+ */
+export async function toCircular(dataUrl: string): Promise<string> {
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = reject;
+    el.src = dataUrl;
+  });
+  const size = Math.min(img.width, img.height);
+  const c = document.createElement("canvas");
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext("2d");
+  if (!ctx) return dataUrl;
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.drawImage(img, (size - img.width) / 2, (size - img.height) / 2);
+  return c.toDataURL("image/png");
+}
+
+/**
  * 卡组摊平为引擎数据：
  * - prefabs：每卡一个，id `prefab-{n}` 连续，faces 引用 sprite id
  * - entities：id `inst-{n}` 连续，坐标全 0（实际位置由牌堆承载，Lab 沙盒可调）

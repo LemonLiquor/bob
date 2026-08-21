@@ -5,10 +5,10 @@ import type { Sprite } from "@/lib/engine/types";
 import type { Deck } from "@/lib/pnp/crop";
 
 // ============================================================
-// 卡组区 — 建组 / 选背面提示条 / 卡行（正背缩略图、替换、删除）
+// 实体组区 — 建组 / 选背面提示条 / 卡行（正背缩略图、替换、删除）
 // ============================================================
 
-/** 图片选择模式：新建卡组选背面 / 替换单卡正背面 */
+/** 图片选择模式：新建实体组选背面 / 替换单个正背面 */
 export type Picker =
   | { type: "back"; deckIdx: number }
   | { type: "replace"; deckIdx: number; cardIdx: number; face: "front" | "back" }
@@ -24,13 +24,14 @@ interface DeckBuilderProps {
   onRemoveCard: (deckIdx: number, cardIdx: number) => void;
   onRemoveDeck: (deckIdx: number) => void;
   onSetPicker: (picker: Picker) => void;
+  onSameFaces: (deckIdx: number) => void; // 正反面一样（back = 各自正面图）
 }
 
 export default function DeckBuilder({
   decks, sprites, picker, selectedCount,
-  onAddDeck, onAutoPair, onRemoveCard, onRemoveDeck, onSetPicker,
+  onAddDeck, onAutoPair, onRemoveCard, onRemoveDeck, onSetPicker, onSameFaces,
 }: DeckBuilderProps) {
-  const spriteUrl = (id: string): string => sprites.find((s) => s.id === id)?.url ?? "";
+  const spriteUrl = (id: string): string | undefined => sprites.find((s) => s.id === id)?.url;
 
   const isPicking = (di: number, ci: number, face: "front" | "back"): boolean =>
     picker?.type === "replace" && picker.deckIdx === di && picker.cardIdx === ci && picker.face === face;
@@ -39,7 +40,7 @@ export default function DeckBuilder({
     <div className="border-2 border-ink p-3 mt-3">
       <div className="flex items-center gap-3 mb-2">
         <p className="text-sm font-medium">
-          卡组（{decks.length} 个，共 {decks.reduce((n, d) => n + d.cards.length, 0)} 张卡）
+          实体组（{decks.length} 组，共 {decks.reduce((n, d) => n + d.cards.length, 0)} 个）
         </p>
         <button
           className="btn-ghost text-xs"
@@ -50,7 +51,7 @@ export default function DeckBuilder({
           自动正反交替组卡
         </button>
         <button className="btn-pop text-sm" onClick={onAddDeck} disabled={selectedCount === 0}>
-          + 新建卡组（{selectedCount} 张）
+          + 新建实体组（{selectedCount} 个）
         </button>
       </div>
 
@@ -58,9 +59,14 @@ export default function DeckBuilder({
         <div className="flex items-center gap-2 mb-2 px-2 py-1 bg-yellow-200/70 border-2 border-ink text-xs">
           <span>
             {picker.type === "back"
-              ? `为「卡组 ${picker.deckIdx + 1}」选择共用背面：点击图片池图片，或跳过用默认卡背`
-              : `替换「卡组 ${picker.deckIdx + 1}」第 ${picker.cardIdx + 1} 张卡的${picker.face === "front" ? "正面" : "背面"}：点击图片池图片`}
+              ? `为「实体组 ${picker.deckIdx + 1}」选择背面：点击图片池图片设为共用背面`
+              : `替换「实体组 ${picker.deckIdx + 1}」第 ${picker.cardIdx + 1} 个的${picker.face === "front" ? "正面" : "背面"}：点击图片池图片`}
           </span>
+          {picker.type === "back" && (
+            <button className="link-pop text-[11px]" onClick={() => onSameFaces(picker.deckIdx)}>
+              正反面一样
+            </button>
+          )}
           {picker.type === "back" && (
             <button className="link-pop text-[11px]" onClick={() => onSetPicker(null)}>
               跳过（默认卡背）
@@ -73,14 +79,14 @@ export default function DeckBuilder({
       )}
 
       {decks.length === 0 ? (
-        <p className="text-[11px] text-muted">先在图片池选中图片，再点「新建卡组」</p>
+        <p className="text-[11px] text-muted">先在图片池选中图片，再点「新建实体组」</p>
       ) : (
         decks.map((deck, di) => (
           <div key={di} className="border-2 border-ink p-2 mb-2 bg-card">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium">卡组 {di + 1}（{deck.cards.length} 张卡）</span>
+              <span className="text-xs font-medium">实体组 {di + 1}（{deck.cards.length} 个）</span>
               <button className="link-pop text-[11px] text-red-500" onClick={() => onRemoveDeck(di)}>
-                删除卡组
+                删除实体组
               </button>
             </div>
             <div className="flex flex-col gap-1">
