@@ -156,7 +156,7 @@ export default function ImportPage() {
     }
   }
 
-  /** 生成桌游数据 json，并直接进入 Lab 沙盒调整初始布局 */
+  /** 生成桌游数据 json（坐标 0），资产入缓存后直接进入 Lab 沙盒调整初始布局 */
   function handleGenerate() {
     if (!file || sprites.length === 0 || !name.trim()) return;
     const { prefabs, entities, piles } = buildGameFromDecks(decks);
@@ -174,24 +174,18 @@ export default function ImportPage() {
       },
       initialState: payload.initialState,
     });
-    // 资产入缓存（Lab 渲染必需：getPrefabFaces 按 prefabId 查表）+ 直接进 Lab
+    // 资产入缓存（Lab 渲染必需：getPrefabFaces 按 prefabId 查表）
     setAssets(payload.assets);
     setLabState(payload.initialState);
     setView("lab");
   }
 
-  /** S4b Lab：进入全屏沙盒（从最新 pendingUpload 初始化，含资产入缓存） */
-  function handleEnterLab() {
-    if (!pendingUpload) return;
-    setAssets(pendingUpload.assets);
-    setLabState(pendingUpload.initialState);
-    setView("lab");
-  }
-
-  /** S4b Lab：拖拽后的坐标写回 initialState（seats 保持无座） */
+  /** S4b Lab：拖拽后的坐标写回 initialState（seats 保持无座），控制台输出保存后的 json */
   function handleSaveFromLab() {
     if (!labState) return;
-    setPendingUpload((prev) => (prev ? { ...prev, initialState: { ...labState, seats: [] } } : prev));
+    const nextInitialState: GameState = { ...labState, seats: [] };
+    setPendingUpload((prev) => (prev ? { ...prev, initialState: nextInitialState } : prev));
+    console.log("saved initialState:", JSON.parse(JSON.stringify(nextInitialState)));
     setView("import");
   }
 
@@ -376,8 +370,6 @@ export default function ImportPage() {
         onNameChange={setName}
         canGenerate={!!file && sprites.length > 0 && !!name.trim()}
         onGenerate={handleGenerate}
-        hasPending={!!pendingUpload}
-        onEnterLab={handleEnterLab}
       />
 
       {error && <p className="mt-2 text-red-500 text-sm">{error}</p>}

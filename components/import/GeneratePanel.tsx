@@ -5,7 +5,7 @@ import type { GameAssets, GameState } from "@/lib/engine/types";
 import type { UploadGameMeta } from "@/lib/multiplayer/protocol";
 
 // ============================================================
-// 生成区 — 桌游名 + 生成按钮（直接进 Lab）+ 再进 Lab 入口
+// 生成区 — 桌游名 + 生成桌游（生成并进入 Lab）
 // ============================================================
 
 /** 待上传桌游包（meta + assets + 无座 initialState） */
@@ -20,11 +20,9 @@ interface GeneratePanelProps {
   onNameChange: (v: string) => void;
   canGenerate: boolean;
   onGenerate: () => void;
-  hasPending: boolean;
-  onEnterLab: () => void;
 }
 
-export default function GeneratePanel({ name, onNameChange, canGenerate, onGenerate, hasPending, onEnterLab }: GeneratePanelProps) {
+export default function GeneratePanel({ name, onNameChange, canGenerate, onGenerate }: GeneratePanelProps) {
   return (
     <div className="flex items-end justify-end gap-2 mt-4">
       <Link href="/games" className="btn-ghost text-sm">
@@ -46,11 +44,6 @@ export default function GeneratePanel({ name, onNameChange, canGenerate, onGener
       >
         生成桌游
       </button>
-      {hasPending && (
-        <button className="link-pop text-sm" onClick={onEnterLab}>
-          进入 Lab 调整
-        </button>
-      )}
     </div>
   );
 }
