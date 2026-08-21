@@ -1,9 +1,8 @@
 // ============================================================
-// PnP 裁切 — 网格裁切（手动边距/间隔参数）+ 双面打印镜像配对 + 资产生成
+// PnP 裁切 — 网格裁切（手动边距/间隔参数）+ 双面打印镜像配对 + 卡组摊平
 // ============================================================
 
-import type { GameAssets, Prefab, Sprite } from "../engine/types";
-import type { UploadGameMeta } from "../multiplayer/protocol";
+import type { EntityState, Pile, Prefab, Sprite } from "../engine/types";
 
 /** 裁切配置（单位：canvas 像素，pdf.js scale 2 渲染） */
 export interface CropConfig {
@@ -69,45 +68,41 @@ export function mirrorBackIndex(frontIndex: number, cols: number): number {
 }
 
 /** 单页对：正面裁切结果 + 背面裁切结果（null = 用默认卡背） */
-export interface PagePairData {
-  frontDataUrls: string[];
-  backDataUrls: string[] | null;
-}
+// ============================================================
+// 卡组摊平 — 页面内临时卡组结构 → prefabs / entities / piles
+// ============================================================
 
-export interface BuildPnpMultiParams {
-  name: string;
-  cols: number;
-  pagePairs: PagePairData[];  // 多页正反交替 PDF：每页对一组，全部合成一个桌游
+/** 卡组（页面内临时结构，不进协议/存储）：每卡引用图片池 sprite id */
+export interface Deck {
+  cards: { frontSpriteId: string; backSpriteId: string }[]; // backSpriteId 空串 = 默认卡背
 }
 
 /**
- * 生成 PnP 资产（内存生成，不落盘）——多页对合成一个桌游（编译级适配）：
- * - 每张卡正面 → 一个 sprite；有背面（镜像配对）→ 各自一个背面 sprite
- * - 每张卡 → 一个 prefab（faces 引用对应 sprite；无背面 → back 空串，渲染回退默认卡背）
- * - 只产 meta + 资产，初始状态由客户端 buildGame 派生
- * - 注意：导入侧重做（每页对 → 多牌堆/共用背面）留待后续需求
+ * 卡组摊平为引擎数据：
+ * - prefabs：每卡一个，id `prefab-{n}` 连续，faces 引用 sprite id
+ * - entities：id `inst-{n}` 连续，坐标全 0（实际位置由牌堆承载，Lab 沙盒可调）
+ * - piles：每卡组一个，id `pile-{ts+di}`，entityIds 按卡组内顺序，坐标全 0
+ * 只产结构，初始状态坐标由导入页 Lab 沙盒自定义。
  */
-export async function buildPnpAssetsMulti(params: BuildPnpMultiParams): Promise<{ meta: UploadGameMeta; assets: GameAssets }> {
-  const { name, cols, pagePairs } = params;
-  const gameId = `pnp-${Date.now()}`;
-  const sprites: Sprite[] = [];
+export function buildGameFromDecks(decks: Deck[]): {
+  prefabs: Prefab[];
+  entities: EntityState[];
+  piles: Pile[];
+} {
   const prefabs: Prefab[] = [];
+  const entities: EntityState[] = [];
+  const piles: Pile[] = [];
+  const ts = Date.now();
   let n = 0;
-
-  for (const pair of pagePairs) {
-    pair.frontDataUrls.forEach((frontUrl, k) => {
-      sprites.push({ id: `sprite-f${n}`, url: frontUrl });
-      const backUrl = pair.backDataUrls ? pair.backDataUrls[mirrorBackIndex(k, cols)] : undefined;
-      if (backUrl) {
-        sprites.push({ id: `sprite-b${n}`, url: backUrl });
-      }
-      prefabs.push({
-        id: `prefab-c${n}`,
-        faces: { front: `sprite-f${n}`, back: backUrl ? `sprite-b${n}` : "" },
-      });
+  for (let di = 0; di < decks.length; di++) {
+    const entityIds: string[] = [];
+    for (const card of decks[di].cards) {
+      prefabs.push({ id: `prefab-${n}`, faces: { front: card.frontSpriteId, back: card.backSpriteId } });
+      entities.push({ id: `inst-${n}`, prefabId: `prefab-${n}`, faceUp: false, x: 0, y: 0, zIndex: 0 });
+      entityIds.push(`inst-${n}`);
       n++;
-    });
+    }
+    piles.push({ id: `pile-${ts + di}`, entityIds, x: 0, y: 0 });
   }
-
-  return { meta: { id: gameId, name, icon: "🖼️" }, assets: { sprites, prefabs } };
+  return { prefabs, entities, piles };
 }

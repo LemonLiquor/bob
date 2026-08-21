@@ -3,24 +3,14 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { getPageCount, renderPageToCanvas } from "@/lib/pnp/pdf";
-import { cropGrid, DEFAULT_CROP, type CropConfig } from "@/lib/pnp/crop";
-import type { Sprite } from "@/lib/engine/types";
+import { cropGrid, buildGameFromDecks, DEFAULT_CROP, type CropConfig, type Deck } from "@/lib/pnp/crop";
+import type { GameAssets, GameState, Sprite } from "@/lib/engine/types";
+import type { UploadGameMeta } from "@/lib/multiplayer/protocol";
 import CropInput from "@/components/import/CropInput";
 import GridPreview, { type PreviewData } from "@/components/import/GridPreview";
 import CardBack from "@/components/game/CardBack";
 
-// ============================================================
-// 卡组（页面内临时结构，S4 摊平为 prefabs + piles）
-// ============================================================
-
-interface DeckCard {
-  frontSpriteId: string;
-  backSpriteId: string; // "" = 默认卡背
-}
-
-interface Deck {
-  cards: DeckCard[];
-}
+// 卡组类型见 lib/pnp/crop.ts（页面内临时结构，S4a 摊平为 prefabs + piles）
 
 /** 图片选择模式：新建卡组选背面 / 替换单卡正背面 */
 type Picker =
@@ -61,6 +51,12 @@ export default function ImportPage() {
   const [rows, setRows] = useState(4);
   const [cols, setCols] = useState(4);
   const [crop, setCrop] = useState<CropConfig>(DEFAULT_CROP);
+  const [name, setName] = useState("");
+  const [pendingUpload, setPendingUpload] = useState<{
+    meta: UploadGameMeta;
+    assets: GameAssets;
+    initialState: GameState;
+  } | null>(null);
   const [sprites, setSprites] = useState<Sprite[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
@@ -92,6 +88,7 @@ export default function ImportPage() {
     }
 
     setFile(f);
+    setName(f.name.replace(/\.pdf$/i, ""));
     setError(null);
     setBusy(true);
     try {
@@ -101,6 +98,7 @@ export default function ImportPage() {
       setSelected(new Set());
       setDecks([]);
       setPicker(null);
+      setPendingUpload(null);
       setSelectedPages(new Set(Array.from({ length: count }, (_, i) => i + 1)));
       setPreviews(new Array(count).fill(null));
 
@@ -160,6 +158,31 @@ export default function ImportPage() {
       setBusy(false);
       setProgress("");
     }
+  }
+
+  /** 验收打印/页面展示：url 截断摘要，避免 dataURL 刷屏 */
+  function jsonPreview(payload: { meta: UploadGameMeta; assets: GameAssets; initialState: GameState }) {
+    return {
+      meta: payload.meta,
+      assets: {
+        sprites: payload.assets.sprites.map((s) => ({ id: s.id, url: s.url.slice(0, 60) + `…(${s.url.length})` })),
+        prefabs: payload.assets.prefabs,
+      },
+      initialState: payload.initialState,
+    };
+  }
+
+  /** 生成桌游数据 json（上传前预览；S4b Lab 调整坐标后更新 initialState） */
+  function handleGenerate() {
+    if (!file || sprites.length === 0 || !name.trim()) return;
+    const { prefabs, entities, piles } = buildGameFromDecks(decks);
+    const payload = {
+      meta: { id: `pnp-${Date.now()}`, name: name.trim(), icon: "🖼️" },
+      assets: { sprites, prefabs },
+      initialState: { entities, piles, seats: [] },
+    };
+    setPendingUpload(payload);
+    console.log("generated:", jsonPreview(payload));
   }
 
   /** 点击切换图片选中态 */
@@ -463,6 +486,38 @@ export default function ImportPage() {
             )}
           </div>
         </>
+      )}
+
+      {/* 生成桌游数据（上传前预览） */}
+      <div className="flex items-end justify-end gap-2 mt-4">
+        <Link href="/games" className="btn-ghost text-sm">
+          取消
+        </Link>
+        <label className="text-xs text-secondary flex flex-col gap-1">
+          桌游名
+          <input
+            className="input-pop w-48"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="我的桌游"
+          />
+        </label>
+        <button
+          className="btn-pop text-sm"
+          onClick={handleGenerate}
+          disabled={!file || sprites.length === 0 || !name.trim()}
+        >
+          生成桌游数据
+        </button>
+      </div>
+
+      {pendingUpload && (
+        <div className="mt-4 border-2 border-ink p-3 bg-card">
+          <p className="text-sm font-medium mb-2">桌游数据（上传前检查；坐标可在 Lab 中调整）</p>
+          <pre className="text-[11px] font-mono text-secondary max-h-64 overflow-auto whitespace-pre-wrap break-all">
+            {JSON.stringify(jsonPreview(pendingUpload), null, 2)}
+          </pre>
+        </div>
       )}
 
       {error && <p className="mt-2 text-red-500 text-sm">{error}</p>}
