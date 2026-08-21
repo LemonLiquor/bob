@@ -3,6 +3,27 @@
 > 记录决定了什么 + 否决了什么，**与代码保持同步**（代码改名/移动时同步更新事实）。
 > 单文件多条目，小项目不建目录；条目按日期倒序。
 
+## 导入页重构：资源工厂 + 卡组组装 + Lab 布局 + 无座 initialState 固化
+
+- **日期**：2026-08-21（首次提出）
+- **主题**：导入流程从"自动批量生成卡牌"重构为"PDF → 图片池 → 手动卡组组装 → Lab 摆布局 → 上传（meta + assets + 无座 initialState）"，初始状态固化取代运行时派生
+
+**决定了什么**：
+
+- **导入四段流程**：页面多选 + 全局切割参数 → 切图图片池（sprite id `sprite-{n}` 全局连续）→ 卡组组装（页面内临时结构 `Deck`，一卡组 = 一个 Pile；共用背面 = prefab 共享 sprite，消除每卡独立背面冗余）→ 生成桌游（`buildGameFromDecks` 摊平为 prefabs / entities / piles，坐标全 0）→ Lab 全屏沙盒（复用 GameBoard 受控模式 + `applyAction` 本地状态）拖摆坐标 → 「保存并上传」
+- **初始状态固化**：上传内容 = meta + assets + `initialState`（`seats: []` 无座）；坐标由 Lab 自定义，运行时**不重算**（不做居中）；`buildGame` 删除
+- **消费端直接用 initialState**：试玩（`game_data`）/ 创建房间（`room_created` 带 `initialState` + 补座版 `gameState`）/ 加入与重连（`room_joined`）/ 重新开始（房主 `update_game_state`，回 initialState + 座位保留实例与归属、仅清空手牌）
+- **座位是运行时概念**：存档无座；`createRoom` 补 1 个默认空座（复用 `createSeat`）保证创建者可落座，加入者由 `joinRoom` 现有逻辑自动补座
+- **旧数据不兼容**：`SavedGame` 增加 `initialState`，`loadAll` 常规格式校验（缺 assets.sprites 或 initialState 跳过），旧 json 不再加载（文件保留）
+- **上传链路**：`upload_game` 携带 `initialState`；上传成功跳转广场；Lab 内失败提示可重试
+
+**否决了什么**：
+
+- 运行时居中方案（`recenterInitialState` 多牌堆整体居中）：坐标改为 Lab 固化，创建房间/试玩直接读 json
+- 座位进存档：无座（重新开始若清空座位会导致玩家无法落座，需冗余补座函数）
+- 旧数据迁移/兼容：不兼容，重新导入
+- 导入页 icon 自定义、卡组命名、每页独立切割参数：留待后续
+
 ## UI 几何风格主题（模块化体系 + 明暗切换）
 
 - **日期**：2026-08-18（首次提出）

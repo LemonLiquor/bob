@@ -22,29 +22,8 @@ import type { PreviewData } from "@/components/import/GridPreview";
 // ============================================================
 // PnP PDF 导入页 — 状态与逻辑中枢，UI 拆分至 components/import/
 // 流程：选 PDF → 页面多选 → 切割参数 → 预览 → 图片池 → 卡组组装
-//       → 生成桌游数据 json（S4a）→ Lab 调整（S4b）→ 上传（S4c）
+//       → 生成桌游 → Lab 沙盒摆布局 → 保存并上传（meta+assets+无座 initialState）
 // ============================================================
-
-/** 验收打印：url 截断摘要，避免 dataURL 刷屏 */
-function logSprites(sprites: Sprite[]): void {
-  console.log("sprites:", {
-    count: sprites.length,
-    list: sprites.map((s) => ({
-      id: s.id,
-      url: s.url.slice(0, 60) + `…(${s.url.length})`,
-    })),
-  });
-}
-
-/** 验收打印：decks 只含 sprite id 引用 */
-function logDecks(decks: Deck[]): void {
-  console.log("decks:", {
-    count: decks.length,
-    list: decks.map((d) => ({
-      cards: d.cards.map((c) => ({ front: c.frontSpriteId, back: c.backSpriteId || "默认卡背" })),
-    })),
-  });
-}
 
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -168,7 +147,6 @@ export default function ImportPage() {
       }
       setSprites(list);
       setSelected(new Set());
-      logSprites(list);
     } catch (err) {
       setError(`切割失败: ${(err as Error).message}`);
     } finally {
@@ -187,14 +165,6 @@ export default function ImportPage() {
       initialState: { entities, piles, seats: [] },
     };
     setPendingUpload(payload);
-    console.log("generated:", {
-      meta: payload.meta,
-      assets: {
-        sprites: payload.assets.sprites.map((s) => ({ id: s.id, url: s.url.slice(0, 60) + `…(${s.url.length})` })),
-        prefabs: payload.assets.prefabs,
-      },
-      initialState: payload.initialState,
-    });
     // 资产入缓存（Lab 渲染必需：getPrefabFaces 按 prefabId 查表）
     setAssets(payload.assets);
     setLabState(payload.initialState);
@@ -207,7 +177,6 @@ export default function ImportPage() {
     const initialState: GameState = { ...labState, seats: [] };
     const payload: PendingUpload = { ...pendingUpload, initialState };
     setPendingUpload(payload);
-    console.log("saved initialState:", JSON.parse(JSON.stringify(initialState)));
     setUploading(true);
     setError(null);
     pendingGameIdRef.current = payload.meta.id;
@@ -243,7 +212,6 @@ export default function ImportPage() {
         const next = prev.map((d, i) =>
           i === deckIdx ? { ...d, cards: d.cards.map((c) => ({ ...c, backSpriteId: id })) } : d,
         );
-        logDecks(next);
         return next;
       });
       setPicker(null);
@@ -257,7 +225,6 @@ export default function ImportPage() {
             ? { ...d, cards: d.cards.map((c, j) => (j === cardIdx ? { ...c, [face]: id } : c)) }
             : d,
         );
-        logDecks(next);
         return next;
       });
       setPicker(null);
@@ -274,13 +241,11 @@ export default function ImportPage() {
     setDecks(next);
     setSelected(new Set());
     setPicker({ type: "back", deckIdx: next.length - 1 });
-    logDecks(next);
   }
 
   function handleRemoveCard(deckIdx: number, cardIdx: number) {
     setDecks((prev) => {
       const next = prev.map((d, i) => (i === deckIdx ? { ...d, cards: d.cards.filter((_, j) => j !== cardIdx) } : d));
-      logDecks(next);
       return next;
     });
   }
@@ -288,32 +253,28 @@ export default function ImportPage() {
   function handleRemoveDeck(deckIdx: number) {
     setDecks((prev) => {
       const next = prev.filter((_, i) => i !== deckIdx);
-      logDecks(next);
       return next;
     });
   }
 
-  /** S5 页对预设：勾选页按顺序两两配对，每对生成一个卡组（正面 = 前页切图，背面 = 后页镜像图）
+  /** S5 页对预设：勾选页按顺序两两配对，全部合入**一个卡组**
+   *  （正面 = 前页切图，背面 = 后页镜像图；奇数页最后一对无背面 = 默认卡背）
    *  前提：图片池为当前勾选页按序切割的结果（第 i 个勾选页的图在 [i*n, (i+1)*n)，n = 行×列） */
   function handleAutoPairDecks() {
     if (sprites.length === 0) return;
     const n = rows * cols;
     const sorted = Array.from(selectedPages).sort((a, b) => a - b);
-    const newDecks: Deck[] = [];
+    const cards: Deck["cards"] = [];
     for (let i = 0; i < sorted.length; i += 2) {
       const frontBase = i * n;
-      const cards = Array.from({ length: n }, (_, k) => ({
-        frontSpriteId: `sprite-${frontBase + k}`,
-        // 奇数页最后一组无背面（默认卡背）
-        backSpriteId: i + 1 < sorted.length ? `sprite-${frontBase + n + mirrorBackIndex(k, cols)}` : "",
-      }));
-      newDecks.push({ cards });
+      for (let k = 0; k < n; k++) {
+        cards.push({
+          frontSpriteId: `sprite-${frontBase + k}`,
+          backSpriteId: i + 1 < sorted.length ? `sprite-${frontBase + n + mirrorBackIndex(k, cols)}` : "",
+        });
+      }
     }
-    setDecks((prev) => {
-      const next = [...prev, ...newDecks];
-      logDecks(next);
-      return next;
-    });
+    setDecks((prev) => [...prev, { cards }]);
   }
 
   function togglePage(page: number) {
