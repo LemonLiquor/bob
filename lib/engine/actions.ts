@@ -100,37 +100,51 @@ export function findOverlap(state: GameState, x: number, y: number, excludeId?: 
   return {};
 }
 
+/** 尺寸相同才可堆叠（缺省 120×168 卡牌） */
+function sameSize(a: EntityState, b: EntityState): boolean {
+  const da = a.size ?? { width: 120, height: 168 };
+  const db = b.size ?? { width: 120, height: 168 };
+  return da.width === db.width && da.height === db.height;
+}
+
 /**
  * 落点处理：把 cardId 放到 (x, y)。
- * - 重叠 pile → 入堆顶部
- * - 重叠自由牌 → 自动建堆（两张入堆）
- * - 空处 → 自由坐标 + zIndex 置顶
+ * - 重叠 pile（且尺寸相同）→ 入堆顶部
+ * - 重叠自由牌（且尺寸相同）→ 自动建堆（两张入堆）
+ * - 空处 / 尺寸不同 → 自由坐标 + zIndex 置顶
  */
 function placeAt(state: GameState, cardId: string, x: number, y: number): GameState {
+  const card = findCard(state, cardId);
+  if (!card) return state;
   const target = findOverlap(state, x, y, cardId);
 
-  // 重叠 pile → 入堆
+  // 重叠 pile → 尺寸相同才入堆
   if (target.pile) {
-    return {
-      ...state,
-      piles: state.piles.map((p) =>
-        p.id === target.pile!.id ? { ...p, entityIds: [...p.entityIds, cardId] } : p,
-      ),
-    };
+    const pileCard = state.entities.find((e) => e.id === target.pile!.entityIds[0]);
+    if (pileCard && sameSize(pileCard, card)) {
+      return {
+        ...state,
+        piles: state.piles.map((p) =>
+          p.id === target.pile!.id ? { ...p, entityIds: [...p.entityIds, cardId] } : p,
+        ),
+      };
+    }
   }
 
-  // 重叠自由牌 → 自动建堆
+  // 重叠自由牌 → 尺寸相同才自动建堆
   if (target.card) {
-    const pile: Pile = {
-      id: `pile-${Date.now()}`,
-      entityIds: [target.card.id, cardId],
-      x,
-      y,
-    };
-    return { ...state, piles: [...state.piles, pile] };
+    if (sameSize(target.card, card)) {
+      const pile: Pile = {
+        id: `pile-${Date.now()}`,
+        entityIds: [target.card.id, cardId],
+        x,
+        y,
+      };
+      return { ...state, piles: [...state.piles, pile] };
+    }
   }
 
-  // 空处 → 自由坐标，zIndex 置顶
+  // 空处 / 尺寸不同 → 自由坐标，zIndex 置顶
   const z = maxZIndex(state) + 1;
   return {
     ...state,

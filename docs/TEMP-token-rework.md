@@ -84,12 +84,15 @@ Prefab = { id, faces: { front, back }, size?: { width, height }, singleFace?: bo
 - `components/game/Pile.tsx`：容器宽高按首张牌尺寸（`getPrefabSize`，缺省 120×168）；`stackLayout` 偏移按尺寸等比缩放（或按尺寸传参）
 - `lib/engine/layout.ts`：`stackLayout` 增加尺寸参数（偏移 = 尺寸比例 × 原偏移）
 - `lib/engine/actions.ts` `findOverlap`：重叠阈值按实体尺寸（中心距 < 尺寸相关距离，小实体更近才算）
+- `lib/engine/actions.ts` `placeAt`：**不同尺寸不可堆叠**——入堆/建堆前校验尺寸相同（缺省 120×168 归一比较），尺寸不同 → 自由放置（可重叠）
+- `lib/engine/types.ts` `EntityState` 增加 `size?`（从 prefab 复制，构建时填充，随 state_sync 传输）
 - 手牌区：**不特别处理**（token 可进手牌，按现有卡牌布局）
 
 **验收**：
 - 试玩/Lab：48px 圆形筹码正确显示（透明背景圆形）、可单拖、可 Shift 整堆移
 - 筹码堆：Pile 虚线框 48px、堆叠偏移小、张数角标正常
 - 筹码与卡牌重叠判定：筹码中心距近才合成堆（小尺寸不误吸）
+- **不同尺寸不可堆叠**：48px 筹码拖到 120×168 卡牌/卡牌堆上 → 不合成堆（自由放置）；同尺寸互拖正常合成堆；旧数据（无 size）卡牌互拖正常成堆
 - 卡牌行为完全不变（无 size = 120×168 原路径）
 
 ---

@@ -39,6 +39,7 @@ export interface EntityState {
   x: number;          // 自由像素坐标（桌面坐标系）
   y: number;
   zIndex: number;     // z 序，越大越靠上
+  size?: { width: number; height: number }; // 渲染尺寸（从 prefab 复制）；缺省 120×168 卡牌；不同尺寸不可堆叠
 }
 
 export interface Pile {

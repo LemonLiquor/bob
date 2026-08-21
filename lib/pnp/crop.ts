@@ -134,7 +134,15 @@ export function buildGameFromGroups(
         ...(group.singleFace ? { singleFace: true } : {}),
         ...(size ? { size } : {}),
       });
-      entities.push({ id: `inst-${n}`, prefabId: `prefab-${n}`, faceUp: false, x: 0, y: 0, zIndex: 0 });
+      entities.push({
+        id: `inst-${n}`,
+        prefabId: `prefab-${n}`,
+        faceUp: false,
+        x: 0,
+        y: 0,
+        zIndex: 0,
+        ...(size ? { size } : {}), // 实例带尺寸（物理属性：不同尺寸不可堆叠）
+      });
       entityIds.push(`inst-${n}`);
       n++;
     }
