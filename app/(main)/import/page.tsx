@@ -33,6 +33,7 @@ export default function ImportPage() {
   const [crop, setCrop] = useState<CropConfig>(DEFAULT_CROP);
   const [sprites, setSprites] = useState<Sprite[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
   const [previews, setPreviews] = useState<(PreviewData | null)[]>([]);
   const loadToken = useRef(0); // 防止换文件后旧预览乱序覆盖
   const [busy, setBusy] = useState(false);
@@ -66,6 +67,7 @@ export default function ImportPage() {
       setPageCount(count);
       setSprites([]);
       setSelected(new Set());
+      setSelectedPages(new Set(Array.from({ length: count }, (_, i) => i + 1)));
       setPreviews(new Array(count).fill(null));
 
       // 全部页预览（token 防乱序：换文件后旧异步结果丢弃）
@@ -99,15 +101,16 @@ export default function ImportPage() {
     setCrop((prev) => ({ ...prev, [kind]: v }));
   }
 
-  /** 切割全部页 → 图片资源池（sprite id 全局连续） */
+  /** 切割勾选页 → 图片资源池（sprite id 全局连续） */
   async function handleCrop() {
     if (!file) return;
     setBusy(true);
     setError(null);
+    const pages = Array.from(selectedPages).sort((a, b) => a - b);
     const list: Sprite[] = [];
     try {
-      for (let page = 1; page <= pageCount; page++) {
-        setProgress(`正在切割第 ${page}/${pageCount} 页...`);
+      for (const page of pages) {
+        setProgress(`正在切割第 ${page}/${pageCount} 页（勾选 ${pages.length} 页）...`);
         const canvas = await renderPageToCanvas(file, page);
         const urls = cropGrid(canvas, rows, cols, crop);
         for (const url of urls) {
@@ -135,6 +138,15 @@ export default function ImportPage() {
     });
   }
 
+  function togglePage(page: number) {
+    setSelectedPages((prev) => {
+      const next = new Set(prev);
+      if (next.has(page)) next.delete(page);
+      else next.add(page);
+      return next;
+    });
+  }
+
   return (
     <main className="p-8 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4">
@@ -156,6 +168,35 @@ export default function ImportPage() {
 
       {file && (
         <>
+          {/* 页面选择（勾选参与切割的页） */}
+          <div className="mb-3 p-3 border-2 border-ink">
+            <div className="flex items-center gap-3 mb-2">
+              <p className="text-sm font-medium">页面选择</p>
+              <button className="link-pop text-[11px]" onClick={() => setSelectedPages(new Set(Array.from({ length: pageCount }, (_, i) => i + 1)))}>
+                全选
+              </button>
+              <button className="link-pop text-[11px]" onClick={() => setSelectedPages(new Set())}>
+                全不选
+              </button>
+              <span className="text-[11px] text-muted">已选 {selectedPages.size}/{pageCount} 页，仅勾选页参与切割</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {Array.from({ length: pageCount }).map((_, i) => {
+                const page = i + 1;
+                const checked = selectedPages.has(page);
+                return (
+                  <label
+                    key={page}
+                    className={`flex items-center gap-1 text-xs cursor-pointer border-2 px-2 py-1 select-none transition-colors ${checked ? "border-red-500 bg-card" : "border-ink opacity-60 hover:opacity-100"}`}
+                  >
+                    <input type="checkbox" checked={checked} onChange={() => togglePage(page)} className="accent-red-500" />
+                    第 {page} 页
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
           {/* 全局切割参数 */}
           <div className="flex flex-wrap items-end gap-3 mb-3 p-3 border-2 border-ink">
             <label className="text-xs text-secondary flex flex-col gap-1">
@@ -189,21 +230,25 @@ export default function ImportPage() {
             <button
               className="btn-pop text-sm"
               onClick={handleCrop}
-              disabled={busy || !file}
+              disabled={busy || !file || selectedPages.size === 0}
             >
-              {busy ? "切割中..." : "切割全部页"}
+              {busy ? "切割中..." : `切割勾选页（${selectedPages.size} 页）`}
             </button>
           </div>
 
-          {/* 全部页预览（格子线按当前参数实时计算） */}
+          {/* 页面预览（只显示勾选页，格子线按当前参数实时计算） */}
           <div className="mb-3 p-3 border-2 border-ink">
-            <p className="text-sm font-medium mb-2">页面预览（{pageCount} 页，调参实时对齐格子线）</p>
+            <p className="text-sm font-medium mb-2">页面预览（{selectedPages.size}/{pageCount} 页，调参实时对齐格子线）</p>
             <div className="flex flex-wrap gap-4">
-              {previews.map((p, i) => (
-                <div key={i} className="w-[240px]">
-                  <GridPreview prev={p} label={`第 ${i + 1} 页`} rows={rows} cols={cols} crop={crop} />
-                </div>
-              ))}
+              {previews.map((p, i) => {
+                const page = i + 1;
+                if (!selectedPages.has(page)) return null;
+                return (
+                  <div key={i} className="w-[240px]">
+                    <GridPreview prev={p} label={`第 ${page} 页`} rows={rows} cols={cols} crop={crop} />
+                  </div>
+                );
+              })}
             </div>
           </div>
 
