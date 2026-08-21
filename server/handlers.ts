@@ -157,6 +157,7 @@ export function handleMessage(
       gameLibrary.saveGame({
         meta: parsed.meta,
         assets: parsed.assets,
+        initialState: parsed.initialState,
         createdAt: now,
         updatedAt: now,
       });

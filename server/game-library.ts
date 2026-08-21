@@ -1,14 +1,13 @@
 import fs from "fs";
 import path from "path";
-import type { GameAssets } from "../lib/engine/types";
+import type { GameAssets, GameState } from "../lib/engine/types";
 import type { GameInfo } from "../lib/multiplayer/protocol";
 
 // ============================================================
 // GameLibrary — 桌游库（持久化）
 // 桌游 = 元数据（id/name/icon）+ 资产（sprites 图片表 + prefabs 模板表）
+//      + 无座初始状态（initialState，坐标由导入页 Lab 自定义）
 // 存 server/data/games/<gameId>.json，跨重启存活。
-// 初始状态不下发/不落盘：客户端收到资产后自行 buildGame（含居中），
-// 多人房间由创建者初始化后 update_game_state 广播。
 // ============================================================
 
 const DATA_DIR = path.join(__dirname, "data", "games");
@@ -16,6 +15,7 @@ const DATA_DIR = path.join(__dirname, "data", "games");
 export interface SavedGame {
   meta: { id: string; name: string; icon: string };
   assets: GameAssets; // sprites（图片表）+ prefabs（模板表）
+  initialState: GameState; // 无座（seats: []），创建房间/试玩直接使用
   createdAt: number;
   updatedAt: number;
 }
@@ -31,9 +31,9 @@ export class GameLibrary {
       try {
         const raw = fs.readFileSync(path.join(DATA_DIR, file), "utf-8");
         const game = JSON.parse(raw) as SavedGame;
-        // 格式校验：新格式 assets 必须含 sprites 数组（旧格式/中间格式跳过）
-        if (!game.assets || !Array.isArray(game.assets.sprites)) {
-          console.warn(`[lib] skip ${file}: 旧格式资产，请用 migrate-assets-deck.js 重建`);
+        // 格式校验：新格式必须含 assets.sprites 与 initialState，缺失则跳过
+        if (!game.assets || !Array.isArray(game.assets.sprites) || !game.initialState) {
+          console.warn(`[lib] skip ${file}: 格式校验失败`);
           continue;
         }
         this.games.set(game.meta.id, game);

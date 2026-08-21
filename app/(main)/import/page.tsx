@@ -1,12 +1,15 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { getPageCount, renderPageToCanvas } from "@/lib/pnp/pdf";
 import { cropGrid, buildGameFromDecks, DEFAULT_CROP, type CropConfig, type Deck } from "@/lib/pnp/crop";
 import type { GameAction, GameState, Sprite } from "@/lib/engine/types";
 import { applyAction } from "@/lib/engine";
 import { setAssets } from "@/lib/assets/cache";
+import { send, onMessage } from "@/lib/multiplayer/transport";
+import type { ServerMessage } from "@/lib/multiplayer/protocol";
 import GameBoard from "@/components/game/GameBoard";
 import PagePicker from "@/components/import/PagePicker";
 import CropParams from "@/components/import/CropParams";
@@ -63,7 +66,25 @@ export default function ImportPage() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const pendingGameIdRef = useRef<string | null>(null); // 上传中的 gameId（匹配 game_uploaded）
   const fileRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+
+  // 上传结果：成功（匹配 gameId）→ 跳转游戏广场；失败 → 恢复可重试
+  useEffect(() => {
+    const unsub = onMessage((msg: ServerMessage) => {
+      if (msg.type === "game_uploaded" && msg.gameId === pendingGameIdRef.current) {
+        pendingGameIdRef.current = null;
+        router.push("/games");
+      } else if (msg.type === "error" && pendingGameIdRef.current) {
+        pendingGameIdRef.current = null;
+        setUploading(false);
+        setError("上传失败，请重试");
+      }
+    });
+    return unsub;
+  }, [router]);
 
   async function loadPreview(f: File, page: number): Promise<PreviewData> {
     const canvas = await renderPageToCanvas(f, page);
@@ -180,13 +201,17 @@ export default function ImportPage() {
     setView("lab");
   }
 
-  /** S4b Lab：拖拽后的坐标写回 initialState（seats 保持无座），控制台输出保存后的 json */
-  function handleSaveFromLab() {
-    if (!labState) return;
-    const nextInitialState: GameState = { ...labState, seats: [] };
-    setPendingUpload((prev) => (prev ? { ...prev, initialState: nextInitialState } : prev));
-    console.log("saved initialState:", JSON.parse(JSON.stringify(nextInitialState)));
-    setView("import");
+  /** S4c：保存坐标 + 直接上传（保存并上传） */
+  function handleSaveAndUpload() {
+    if (!labState || !pendingUpload || uploading) return;
+    const initialState: GameState = { ...labState, seats: [] };
+    const payload: PendingUpload = { ...pendingUpload, initialState };
+    setPendingUpload(payload);
+    console.log("saved initialState:", JSON.parse(JSON.stringify(initialState)));
+    setUploading(true);
+    setError(null);
+    pendingGameIdRef.current = payload.meta.id;
+    send({ type: "upload_game", meta: payload.meta, assets: payload.assets, initialState: payload.initialState });
   }
 
   /** S4b Lab：放弃本次调整，返回导入页（不写回） */
@@ -286,11 +311,20 @@ export default function ImportPage() {
           <span className="text-sm font-bold">Lab — 调整初始布局</span>
           <span className="text-[11px] text-muted">拖动卡牌/牌堆摆放初始位置（无座）</span>
         </div>
+        {error && (
+          <p className="fixed top-14 left-1/2 -translate-x-1/2 z-50 text-red-500 text-xs bg-card border-2 border-red-500 px-2 py-1">
+            {error}
+          </p>
+        )}
         <button className="btn-ghost fixed bottom-3 left-3 z-50 text-xs" onClick={handleDiscardLab}>
           放弃返回
         </button>
-        <button className="btn-pop fixed bottom-3 right-3 z-50 text-xs" onClick={handleSaveFromLab}>
-          保存并返回
+        <button
+          className="btn-pop fixed bottom-3 right-3 z-50 text-xs"
+          onClick={handleSaveAndUpload}
+          disabled={uploading}
+        >
+          {uploading ? "上传中..." : "保存并上传"}
         </button>
         <GameBoard gameState={labState} onAction={handleLabAction} />
       </div>

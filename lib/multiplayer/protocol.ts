@@ -19,7 +19,7 @@ export type ClientMessage =
   | { type: "join_room"; code: string; playerId: string; playerName: string }
   | { type: "leave_room" }
   | { type: "list_rooms" }
-  | { type: "upload_game"; meta: UploadGameMeta; assets: GameAssets }
+  | { type: "upload_game"; meta: UploadGameMeta; assets: GameAssets; initialState: GameState }
   | { type: "list_games" }
   | { type: "get_game"; gameId: string }
   | { type: "game_action"; action: GameAction }
