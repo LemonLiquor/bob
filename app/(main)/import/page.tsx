@@ -279,7 +279,7 @@ export default function ImportPage() {
   /** 图片池点击分发：选背面模式 / 替换模式 / 普通选中切换 */
   function handleSpriteClick(id: string) {
     if (picker?.type === "back") {
-      // 设为实体组所有实体的共用背面
+      // 设为实体组所有实体的共用背面（单面组已固定，不会再进入此模式）
       const { groupIdx } = picker;
       setGroups((prev) => {
         const next = prev.map((g, i) =>
@@ -292,10 +292,12 @@ export default function ImportPage() {
     }
     if (picker?.type === "replace") {
       const { groupIdx, itemIdx, face } = picker;
+      // 字段名与 face 值不同（frontSpriteId / backSpriteId），需映射
+      const key = face === "front" ? "frontSpriteId" : "backSpriteId";
       setGroups((prev) => {
         const next = prev.map((g, i) =>
           i === groupIdx
-            ? { ...g, items: g.items.map((it, j) => (j === itemIdx ? { ...it, [face]: id } : it)) }
+            ? { ...g, items: g.items.map((it, j) => (j === itemIdx ? { ...it, [key]: id } : it)) }
             : g,
         );
         return next;
@@ -308,6 +310,7 @@ export default function ImportPage() {
 
   /** 新建实体组：当前选中的图片 → 正面列表，随后进入选背面模式 */
   function handleAddGroup() {
+    if (selected.size === 0) return;
     if (selected.size === 0) return;
     const newGroup: EntityGroup = { items: Array.from(selected).map((id) => ({ frontSpriteId: id, backSpriteId: "" })) };
     const next = [...groups, newGroup];
@@ -455,6 +458,8 @@ export default function ImportPage() {
               onToggleShape={handleToggleShape}
               onBatchShape={handleBatchShape}
               onBatchSize={handleBatchSize}
+              pickerActive={picker !== null}
+              onSpriteClick={handleSpriteClick}
             />
           )}
           {sprites.length > 0 && (

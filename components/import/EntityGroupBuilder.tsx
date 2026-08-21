@@ -106,7 +106,8 @@ export default function EntityGroupBuilder({
                   <button
                     className={`relative w-10 h-14 border-2 overflow-hidden bg-[#1e3a5f] ${isPicking(gi, ii, "back") ? "animate-pulse border-red-500" : "border-transparent hover:border-secondary"}`}
                     onClick={() => onSetPicker({ type: "replace", groupIdx: gi, itemIdx: ii, face: "back" })}
-                    title={group.singleFace ? "单面实体（正反同图）" : "点击替换背面"}
+                    title={group.singleFace ? "单面实体：背面固定为正面" : "点击替换背面"}
+                    disabled={group.singleFace}
                   >
                     {group.singleFace ? (
                       // 单面组：背面 = 正面图（永远显示正面）

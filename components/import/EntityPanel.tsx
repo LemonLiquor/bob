@@ -17,11 +17,13 @@ interface EntityPanelProps {
   onToggleShape: (id: string) => void;
   onBatchShape: (ids: string[], shape: "rect" | "circle") => void;
   onBatchSize: (ids: string[], size: { width: number; height: number }) => void;
+  pickerActive: boolean; // 替换/选背面模式下，点图走页面分发（两个面板都生效）
+  onSpriteClick: (id: string) => void;
 }
 
 export default function EntityPanel({
   sprites, shapes, sizes, busyIds,
-  onToggleShape, onBatchShape, onBatchSize,
+  onToggleShape, onBatchShape, onBatchSize, pickerActive, onSpriteClick,
 }: EntityPanelProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [w, setW] = useState("");
@@ -71,7 +73,7 @@ export default function EntityPanel({
           return (
             <div
               key={s.id}
-              onClick={() => toggle(s.id)}
+              onClick={() => (pickerActive ? onSpriteClick(s.id) : toggle(s.id))}
               className={`relative flex flex-col items-center gap-1 p-1 border-2 bg-card transition-colors cursor-pointer ${isSel ? "border-red-500 ring-2 ring-red-500/30" : "border-ink"} ${busy ? "opacity-50" : ""}`}
             >
               <img src={s.url} alt={s.id} className="w-full h-[88px] object-contain" />

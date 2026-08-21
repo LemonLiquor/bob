@@ -65,8 +65,10 @@ export default function GameBoard({ gameState: propState, onAction, initialState
   }, [controlled, onAction]);
 
   const handleFlip = useCallback((cardId: string) => {
+    // 单面实体禁用翻面：发送前拦截（省带宽；引擎 flipCard 防御保留）
+    if (gameState.entities.find((e) => e.id === cardId)?.singleFace) return;
     dispatch({ type: "flip_card", cardId });
-  }, [dispatch]);
+  }, [dispatch, gameState]);
 
   // D 键：hover 任意牌 → 抓入手牌区（自由牌 / 牌堆顶牌 / 其他人手牌区均可，沙盒语义）
   const handleDraw = useCallback(
