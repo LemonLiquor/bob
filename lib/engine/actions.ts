@@ -69,16 +69,23 @@ export interface OverlapTarget {
 }
 
 /**
- * 查找与落点 (x, y) 重叠（中心距 < OVERLAP_DISTANCE）的牌堆或自由卡牌。
+ * 查找与落点 (x, y) 重叠（中心距 < 阈值）的牌堆或自由卡牌。
+ * 阈值按目标实体尺寸：短边/2（上限 OVERLAP_DISTANCE）——小实体更近才算重叠。
  * 优先级：pile > 自由牌。pile 中的牌由 pile 位置代表，不单独命中。
  */
 export function findOverlap(state: GameState, x: number, y: number, excludeId?: string): OverlapTarget {
   const { cx, cy } = centerOf(x, y);
+  const threshold = (e?: EntityState): number => {
+    if (!e) return OVERLAP_DISTANCE;
+    const s = e.size ?? { width: 120, height: 168 };
+    return Math.min(OVERLAP_DISTANCE, Math.min(s.width, s.height) / 2);
+  };
 
-  // 1. pile 优先
+  // 1. pile 优先（阈值按堆内实体尺寸）
   for (const pile of state.piles) {
     const pc = centerOf(pile.x, pile.y);
-    if (distance(cx, cy, pc.cx, pc.cy) < OVERLAP_DISTANCE) {
+    const pileCard = state.entities.find((e) => e.id === pile.entityIds[0]);
+    if (distance(cx, cy, pc.cx, pc.cy) < threshold(pileCard)) {
       return { pile };
     }
   }
@@ -92,7 +99,7 @@ export function findOverlap(state: GameState, x: number, y: number, excludeId?: 
     if (card.id === excludeId) continue;
     if (inContainer(card.id)) continue;
     const cc = centerOf(card.x, card.y);
-    if (distance(cx, cy, cc.cx, cc.cy) < OVERLAP_DISTANCE) {
+    if (distance(cx, cy, cc.cx, cc.cy) < threshold(card)) {
       return { card };
     }
   }
@@ -238,12 +245,12 @@ export function movePile(state: GameState, pileId: string, x: number, y: number)
   };
 }
 
-/** 翻转指定卡牌的朝向。不可变更新 */
+/** 翻转指定卡牌的朝向。单面实体不可翻（直接忽略）。不可变更新 */
 export function flipCard(state: GameState, cardId: string): GameState {
   const cardIndex = state.entities.findIndex((e) => e.id === cardId);
   if (cardIndex === -1) return state;
-
   const card = state.entities[cardIndex];
+  if (card.singleFace) return state; // 单面实体禁用翻面
   return {
     ...state,
     entities: [

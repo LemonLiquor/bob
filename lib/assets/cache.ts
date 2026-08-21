@@ -39,9 +39,9 @@ export class AssetLibrary {
     return [front.url, this.sprites.get(prefab.faces.back)?.url ?? ""];
   }
 
-  /** 单面实体（永远显示正面，F 翻面无效果） */
-  getPrefabSingleFace(prefabId: string): boolean {
-    return this.prefabs.get(prefabId)?.singleFace ?? false;
+  /** 渲染尺寸（缺省 120×168 卡牌） */
+  getPrefabSize(prefabId: string): { width: number; height: number } | undefined {
+    return this.prefabs.get(prefabId)?.size;
   }
 }
 
@@ -57,7 +57,7 @@ export function getPrefabFaces(prefabId: string): [string, string] | undefined {
   return library?.getPrefabFaces(prefabId);
 }
 
-/** 按 prefab id 取单面标记（true = 永远显示正面） */
-export function getPrefabSingleFace(prefabId: string): boolean {
-  return library?.getPrefabSingleFace(prefabId) ?? false;
+/** 按 prefab id 取渲染尺寸（缺省 120×168 卡牌） */
+export function getPrefabSize(prefabId: string): { width: number; height: number } | undefined {
+  return library?.getPrefabSize(prefabId);
 }

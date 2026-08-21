@@ -28,6 +28,11 @@ export default function Pile({ pile, cards, onShuffle, shiftHeld }: PileProps) {
   const count = cards.length;
   const offsets = stackLayout(count);
 
+  // 容器尺寸跟随堆内实体（缺省 120×168 卡牌）
+  const first = cards[0];
+  const pw = first?.size?.width ?? 120;
+  const ph = first?.size?.height ?? 168;
+
   // hover 牌堆时监听 R（洗牌）。
   // D（抓牌）由 CardActionProvider 统一处理：hover 时 active 即顶牌，
   // handleDraw(顶牌 id) 走 move_to_hand，等价于从顶部抓，避免双监听重复发动作
@@ -57,8 +62,8 @@ export default function Pile({ pile, cards, onShuffle, shiftHeld }: PileProps) {
   const containerStyle: React.CSSProperties = {
     left: pile.x,
     top: pile.y,
-    width: 120,
-    height: 168,
+    width: pw,
+    height: ph,
     transform: CSS.Translate.toString(transform),
   };
 

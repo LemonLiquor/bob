@@ -142,6 +142,7 @@ export function buildGameFromGroups(
         y: 0,
         zIndex: 0,
         ...(size ? { size } : {}), // 实例带尺寸（物理属性：不同尺寸不可堆叠）
+        ...(group.singleFace ? { singleFace: true } : {}), // 实例带单面标记（引擎禁翻面）
       });
       entityIds.push(`inst-${n}`);
       n++;

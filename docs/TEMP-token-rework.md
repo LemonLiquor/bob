@@ -81,8 +81,7 @@ Prefab = { id, faces: { front, back }, size?: { width, height }, singleFace?: bo
 **改**：
 - `lib/assets/cache.ts`：新增 `getPrefabSize(prefabId): { width, height } | undefined`（缺省 undefined）
 - `components/game/Card.tsx`：容器尺寸按 `getPrefabSize`（缺省 120×168）；圆形透明图原样显示
-- `components/game/Pile.tsx`：容器宽高按首张牌尺寸（`getPrefabSize`，缺省 120×168）；`stackLayout` 偏移按尺寸等比缩放（或按尺寸传参）
-- `lib/engine/layout.ts`：`stackLayout` 增加尺寸参数（偏移 = 尺寸比例 × 原偏移）
+- `components/game/Pile.tsx`：容器宽高按首张牌尺寸（`getPrefabSize`，缺省 120×168）
 - `lib/engine/actions.ts` `findOverlap`：重叠阈值按实体尺寸（中心距 < 尺寸相关距离，小实体更近才算）
 - `lib/engine/actions.ts` `placeAt`：**不同尺寸不可堆叠**——入堆/建堆前校验尺寸相同（缺省 120×168 归一比较），尺寸不同 → 自由放置（可重叠）
 - `lib/engine/types.ts` `EntityState` 增加 `size?`（从 prefab 复制，构建时填充，随 state_sync 传输）

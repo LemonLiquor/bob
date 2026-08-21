@@ -40,6 +40,7 @@ export interface EntityState {
   y: number;
   zIndex: number;     // z 序，越大越靠上
   size?: { width: number; height: number }; // 渲染尺寸（从 prefab 复制）；缺省 120×168 卡牌；不同尺寸不可堆叠
+  singleFace?: boolean; // 单面实体（从 prefab 复制）：禁用翻面（flipCard 直接忽略）
 }
 
 export interface Pile {
