@@ -34,7 +34,11 @@ export default function ImportPage() {
   const [crop, setCrop] = useState<CropConfig>(DEFAULT_CROP);
   const [name, setName] = useState("");
   const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
-  const [sprites, setSprites] = useState<Sprite[]>([]);
+  const [sprites, setSprites] = useState<Sprite[]>([]); // 全量累积（实体组引用的旧批次保留，生成全量上传）
+  const [lastBatch, setLastBatch] = useState<Sprite[]>([]); // 最近一次切割结果（实体定义面板/图片池显示）
+  const [pageSprites, setPageSprites] = useState<Map<number, Sprite[]>>(new Map()); // 页号 → 该页最新批次（自动组卡用）
+  const spriteCounterRef = useRef(0); // sprite id 全局递增（永不重用；换文件重置）
+  const [poolFilter, setPoolFilter] = useState<Set<string>>(new Set()); // 实体定义选中集（图片池显示过滤）
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
   const [previews, setPreviews] = useState<(PreviewData | null)[]>([]);
@@ -97,6 +101,10 @@ export default function ImportPage() {
       const count = await getPageCount(f);
       setPageCount(count);
       setSprites([]);
+      setLastBatch([]);
+      setPageSprites(new Map());
+      spriteCounterRef.current = 0;
+      setPoolFilter(new Set());
       setSelected(new Set());
       setGroups([]);
       setPicker(null);
@@ -105,26 +113,28 @@ export default function ImportPage() {
       setSizes(new Map());
       setShapeBusy(new Set());
       originalUrlsRef.current = new Map();
-      setSelectedPages(new Set(Array.from({ length: count }, (_, i) => i + 1)));
+      // 默认全不选 + 不加载预览（大 PDF 不一次性全加载）；勾选页时才加载
+      loadToken.current++; // 换文件：旧异步预览结果丢弃
+      setSelectedPages(new Set());
       setPreviews(new Array(count).fill(null));
-
-      // 全部页预览（token 防乱序：换文件后旧异步结果丢弃）
-      const token = ++loadToken.current;
-      for (let page = 1; page <= count; page++) {
-        setProgress(`正在加载预览 第 ${page}/${count} 页...`);
-        try {
-          const p = await loadPreview(f, page);
-          if (loadToken.current !== token) return; // 已换文件，丢弃
-          setPreviews((prev) => prev.map((x, i) => (i === page - 1 ? p : x)));
-        } catch {
-          /* 单页失败不中断 */
-        }
-      }
     } catch (err) {
       setError(`PDF 解析失败: ${(err as Error).message}`);
     } finally {
       setBusy(false);
       setProgress("");
+    }
+  }
+
+  /** 勾选页时才加载该页预览（token 防换文件乱序） */
+  async function loadPreviewPage(page: number) {
+    if (!file) return;
+    const token = loadToken.current;
+    try {
+      const p = await loadPreview(file, page);
+      if (loadToken.current !== token) return; // 已换文件，丢弃
+      setPreviews((prev) => prev.map((x, i) => (i === page - 1 ? p : x)));
+    } catch {
+      /* 单页失败不中断 */
     }
   }
 
@@ -139,30 +149,35 @@ export default function ImportPage() {
     setCrop((prev) => ({ ...prev, [kind]: v }));
   }
 
-  /** 切割勾选页 → 图片资源池（sprite id 全局连续） */
+  /** 切割勾选页 → 追加式：sprites 全量累积（组引用保留），
+   *  实体定义面板只显示最近一次切割（lastBatch）并自动全选；
+   *  sprite id 全局计数器递增永不重用 */
   async function handleCrop() {
     if (!file) return;
     setBusy(true);
     setError(null);
     const pages = Array.from(selectedPages).sort((a, b) => a - b);
-    const list: Sprite[] = [];
+    const allBatch: Sprite[] = [];
+    const pageBatches = new Map<number, Sprite[]>();
     try {
       for (const page of pages) {
         setProgress(`正在切割第 ${page}/${pageCount} 页（勾选 ${pages.length} 页）...`);
         const canvas = await renderPageToCanvas(file, page);
         const urls = cropGrid(canvas, rows, cols, crop);
-        for (const url of urls) {
-          list.push({ id: `sprite-${list.length}`, url });
-        }
+        const pageBatch: Sprite[] = urls.map((url) => ({ id: `sprite-${spriteCounterRef.current++}`, url }));
+        pageBatches.set(page, pageBatch);
+        allBatch.push(...pageBatch);
       }
-      setSprites(list);
+      setPageSprites((prev) => {
+        const next = new Map(prev);
+        for (const [page, batch] of pageBatches) next.set(page, batch);
+        return next;
+      });
+      setSprites((prev) => [...prev, ...allBatch]);
+      setLastBatch(allBatch);
+      setPoolFilter(new Set(allBatch.map((s) => s.id))); // 自动全选最新批次（分批处理）
       setSelected(new Set());
-      setGroups([]);
-      setPicker(null);
-      setShapes(new Map());
-      setSizes(new Map());
-      setShapeBusy(new Set());
-      originalUrlsRef.current = new Map();
+      // 保留 groups / shapes / sizes（分批追加）
     } catch (err) {
       setError(`切割失败: ${(err as Error).message}`);
     } finally {
@@ -228,7 +243,9 @@ export default function ImportPage() {
       setShapeBusy((prev) => new Set(prev).add(id));
       try {
         const circularUrl = await toCircular(sprite.url);
+        // 同步更新全量与面板批次（面板显示 lastBatch）
         setSprites((prev) => prev.map((s) => (s.id === id ? { ...s, url: circularUrl } : s)));
+        setLastBatch((prev) => prev.map((s) => (s.id === id ? { ...s, url: circularUrl } : s)));
         setShapes((prev) => new Map(prev).set(id, "circle"));
       } catch {
         /* 处理失败保持原样 */
@@ -244,6 +261,7 @@ export default function ImportPage() {
       const original = originalUrlsRef.current.get(id);
       if (original) {
         setSprites((prev) => prev.map((s) => (s.id === id ? { ...s, url: original } : s)));
+        setLastBatch((prev) => prev.map((s) => (s.id === id ? { ...s, url: original } : s)));
       }
       setShapes((prev) => new Map(prev).set(id, "rect"));
     }
@@ -347,18 +365,18 @@ export default function ImportPage() {
 
   /** S5 页对预设：勾选页按顺序两两配对，全部合入**一个实体组**
    *  （正面 = 前页切图，背面 = 后页镜像图；奇数页最后一对无背面 = 默认卡背）
-   *  前提：图片池为当前勾选页按序切割的结果（第 i 个勾选页的图在 [i*n, (i+1)*n)，n = 行×列） */
+   *  按页号取该页最新批次（不依赖 id 连续性） */
   function handleAutoPairGroups() {
     if (sprites.length === 0) return;
-    const n = rows * cols;
     const sorted = Array.from(selectedPages).sort((a, b) => a - b);
     const items: EntityGroup["items"] = [];
     for (let i = 0; i < sorted.length; i += 2) {
-      const frontBase = i * n;
-      for (let k = 0; k < n; k++) {
+      const front = pageSprites.get(sorted[i]) ?? [];
+      const back = pageSprites.get(sorted[i + 1]) ?? [];
+      for (let k = 0; k < front.length; k++) {
         items.push({
-          frontSpriteId: `sprite-${frontBase + k}`,
-          backSpriteId: i + 1 < sorted.length ? `sprite-${frontBase + n + mirrorBackIndex(k, cols)}` : "",
+          frontSpriteId: front[k].id,
+          backSpriteId: back.length ? back[mirrorBackIndex(k, cols)].id : "",
         });
       }
     }
@@ -368,8 +386,15 @@ export default function ImportPage() {
   function togglePage(page: number) {
     setSelectedPages((prev) => {
       const next = new Set(prev);
-      if (next.has(page)) next.delete(page);
-      else next.add(page);
+      if (next.has(page)) {
+        next.delete(page);
+        // 取消勾选：清空该页预览
+        setPreviews((p) => p.map((x, i) => (i === page - 1 ? null : x)));
+      } else {
+        next.add(page);
+        // 勾选：加载该页预览
+        void loadPreviewPage(page);
+      }
       return next;
     });
   }
@@ -428,8 +453,16 @@ export default function ImportPage() {
             pageCount={pageCount}
             selectedPages={selectedPages}
             onTogglePage={togglePage}
-            onSelectAll={() => setSelectedPages(new Set(Array.from({ length: pageCount }, (_, i) => i + 1)))}
-            onSelectNone={() => setSelectedPages(new Set())}
+            onSelectAll={() => {
+              setSelectedPages(new Set(Array.from({ length: pageCount }, (_, i) => i + 1)));
+              // 全选：加载全部页预览
+              for (let page = 1; page <= pageCount; page++) void loadPreviewPage(page);
+            }}
+            onSelectNone={() => {
+              setSelectedPages(new Set());
+              // 全不选：清空预览
+              setPreviews(new Array(pageCount).fill(null));
+            }}
           />
           <CropParams
             rows={rows}
@@ -449,12 +482,14 @@ export default function ImportPage() {
             cols={cols}
             crop={crop}
           />
-          {sprites.length > 0 && (
+          {lastBatch.length > 0 && (
             <EntityPanel
-              sprites={sprites}
+              sprites={lastBatch}
               shapes={shapes}
               sizes={sizes}
               busyIds={shapeBusy}
+              selected={poolFilter}
+              onSelectionChange={setPoolFilter}
               onToggleShape={handleToggleShape}
               onBatchShape={handleBatchShape}
               onBatchSize={handleBatchSize}
@@ -462,15 +497,23 @@ export default function ImportPage() {
               onSpriteClick={handleSpriteClick}
             />
           )}
-          {sprites.length > 0 && (
-            <SpritePool
-              sprites={sprites}
-              selected={selected}
-              onToggle={handleSpriteClick}
-              onSelectAll={() => setSelected(new Set(sprites.map((s) => s.id)))}
-              onSelectNone={() => setSelected(new Set())}
-            />
-          )}
+          {(() => {
+            // 图片池 = 实体定义选中集（基于最近一次切割）
+            const poolSprites = poolFilter.size > 0 ? lastBatch.filter((s) => poolFilter.has(s.id)) : [];
+            return poolSprites.length > 0 ? (
+              <SpritePool
+                sprites={poolSprites}
+                selected={selected}
+                onToggle={handleSpriteClick}
+                onSelectAll={() => setSelected(new Set(poolSprites.map((s) => s.id)))}
+                onSelectNone={() => setSelected(new Set())}
+              />
+            ) : (
+              <p className="text-[11px] text-muted mt-2">
+                图片池仅显示实体定义面板中选中的图片；请先在实体定义面板全选或点选图片
+              </p>
+            );
+          })()}
           <EntityGroupBuilder
             groups={groups}
             sprites={sprites}

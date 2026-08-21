@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import CardBack from "@/components/game/CardBack";
 import type { Sprite } from "@/lib/engine/types";
 import type { EntityGroup } from "@/lib/pnp/crop";
@@ -32,6 +33,17 @@ export default function EntityGroupBuilder({
   onAddGroup, onAutoPair, onRemoveItem, onRemoveGroup, onSetPicker, onSameFaces,
 }: EntityGroupBuilderProps) {
   const spriteUrl = (id: string): string | undefined => sprites.find((s) => s.id === id)?.url;
+
+  // 组折叠状态（本地 UI 状态）
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const toggleCollapse = (gi: number) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(gi)) next.delete(gi);
+      else next.add(gi);
+      return next;
+    });
+  };
 
   const isPicking = (gi: number, ii: number, face: "front" | "back"): boolean =>
     picker?.type === "replace" && picker.groupIdx === gi && picker.itemIdx === ii && picker.face === face;
@@ -84,12 +96,22 @@ export default function EntityGroupBuilder({
         groups.map((group, gi) => (
           <div key={gi} className="border-2 border-ink p-2 mb-2 bg-card">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium">实体组 {gi + 1}（{group.items.length} 个）</span>
+              <div className="flex items-center gap-2">
+                <button
+                  className="text-xs text-secondary hover:text-ink"
+                  onClick={() => toggleCollapse(gi)}
+                  title={collapsed.has(gi) ? "展开" : "折叠"}
+                >
+                  {collapsed.has(gi) ? "▸" : "▾"}
+                </button>
+                <span className="text-xs font-medium">实体组 {gi + 1}（{group.items.length} 个）</span>
+              </div>
               <button className="link-pop text-[11px] text-red-500" onClick={() => onRemoveGroup(gi)}>
                 删除实体组
               </button>
             </div>
-            <div className="flex flex-col gap-1">
+            {!collapsed.has(gi) && (
+              <div className="flex flex-col gap-1">
               {group.items.map((item, ii) => (
                 <div key={ii} className="flex items-center gap-2 border border-ink/40 p-1">
                   <button
@@ -136,7 +158,8 @@ export default function EntityGroupBuilder({
                   </button>
                 </div>
               ))}
-            </div>
+              </div>
+            )}
           </div>
         ))
       )}

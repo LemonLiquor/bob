@@ -7,6 +7,7 @@ import type { Sprite } from "@/lib/engine/types";
 // 实体定义面板（页面预览与图片池之间）— 每张切图定义：
 // 形状（矩形/圆形，圆形即时生成透明 PNG）+ 渲染大小（宽高）
 // 默认全部矩形 120×168 = 现有卡牌设计，零处理
+// 多选为受控状态（page 持有），同时作为图片池的显示过滤条件
 // ============================================================
 
 interface EntityPanelProps {
@@ -14,6 +15,8 @@ interface EntityPanelProps {
   shapes: Map<string, "rect" | "circle">;
   sizes: Map<string, { width: number; height: number }>;
   busyIds: Set<string>; // 圆形处理中的图（禁用）
+  selected: Set<string>; // 受控多选（兼作图片池过滤）
+  onSelectionChange: React.Dispatch<React.SetStateAction<Set<string>>>;
   onToggleShape: (id: string) => void;
   onBatchShape: (ids: string[], shape: "rect" | "circle") => void;
   onBatchSize: (ids: string[], size: { width: number; height: number }) => void;
@@ -22,15 +25,14 @@ interface EntityPanelProps {
 }
 
 export default function EntityPanel({
-  sprites, shapes, sizes, busyIds,
+  sprites, shapes, sizes, busyIds, selected, onSelectionChange,
   onToggleShape, onBatchShape, onBatchSize, pickerActive, onSpriteClick,
 }: EntityPanelProps) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [w, setW] = useState("");
   const [h, setH] = useState("");
 
   const toggle = (id: string) => {
-    setSelected((prev) => {
+    onSelectionChange((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -55,10 +57,10 @@ export default function EntityPanel({
     <div className="border-2 border-ink p-3 mt-3">
       <div className="flex items-center gap-3 mb-2">
         <p className="text-sm font-medium">实体定义（默认矩形 120×168 = 卡牌）</p>
-        <button className="link-pop text-[11px]" onClick={() => setSelected(new Set(sprites.map((s) => s.id)))}>
+        <button className="link-pop text-[11px]" onClick={() => onSelectionChange(new Set(sprites.map((s) => s.id)))}>
           全选
         </button>
-        <button className="link-pop text-[11px]" onClick={() => setSelected(new Set())}>
+        <button className="link-pop text-[11px]" onClick={() => onSelectionChange(new Set())}>
           全不选
         </button>
         <span className="text-[11px] text-muted">已选 {selected.size}/{sprites.length} 张</span>
