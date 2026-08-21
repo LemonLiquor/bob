@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getPageCount, renderPageToCanvas } from "@/lib/pnp/pdf";
-import { cropGrid, buildGameFromDecks, mirrorBackIndex, toCircular, DEFAULT_CROP, type CropConfig, type Deck } from "@/lib/pnp/crop";
+import { cropGrid, buildGameFromGroups, mirrorBackIndex, toCircular, DEFAULT_CROP, type CropConfig, type EntityGroup } from "@/lib/pnp/crop";
 import type { GameAction, GameState, Sprite } from "@/lib/engine/types";
 import { applyAction } from "@/lib/engine";
 import { setAssets } from "@/lib/assets/cache";
@@ -16,7 +16,7 @@ import CropParams from "@/components/import/CropParams";
 import PagePreviews from "@/components/import/PagePreviews";
 import EntityPanel from "@/components/import/EntityPanel";
 import SpritePool from "@/components/import/SpritePool";
-import DeckBuilder, { type Picker } from "@/components/import/DeckBuilder";
+import EntityGroupBuilder, { type Picker } from "@/components/import/EntityGroupBuilder";
 import GeneratePanel, { type PendingUpload } from "@/components/import/GeneratePanel";
 import type { PreviewData } from "@/components/import/GridPreview";
 
@@ -38,7 +38,7 @@ export default function ImportPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
   const [previews, setPreviews] = useState<(PreviewData | null)[]>([]);
-  const [decks, setDecks] = useState<Deck[]>([]);
+  const [groups, setGroups] = useState<EntityGroup[]>([]);
   const [picker, setPicker] = useState<Picker>(null);
   // 实体定义面板状态：形状（默认矩形）+ 渲染大小（默认未设置 = 卡牌 120×168）
   const [shapes, setShapes] = useState<Map<string, "rect" | "circle">>(new Map());
@@ -98,7 +98,7 @@ export default function ImportPage() {
       setPageCount(count);
       setSprites([]);
       setSelected(new Set());
-      setDecks([]);
+      setGroups([]);
       setPicker(null);
       setPendingUpload(null);
       setShapes(new Map());
@@ -157,7 +157,7 @@ export default function ImportPage() {
       }
       setSprites(list);
       setSelected(new Set());
-      setDecks([]);
+      setGroups([]);
       setPicker(null);
       setShapes(new Map());
       setSizes(new Map());
@@ -174,7 +174,7 @@ export default function ImportPage() {
   /** 生成桌游数据 json（坐标 0），资产入缓存后直接进入 Lab 沙盒调整初始布局 */
   function handleGenerate() {
     if (!file || sprites.length === 0 || !name.trim()) return;
-    const { prefabs, entities, piles } = buildGameFromDecks(decks);
+    const { prefabs, entities, piles } = buildGameFromGroups(groups);
     const payload: PendingUpload = {
       meta: { id: `pnp-${Date.now()}`, name: name.trim(), icon: "🖼️" },
       assets: { sprites, prefabs },
@@ -271,10 +271,10 @@ export default function ImportPage() {
   function handleSpriteClick(id: string) {
     if (picker?.type === "back") {
       // 设为实体组所有实体的共用背面
-      const { deckIdx } = picker;
-      setDecks((prev) => {
-        const next = prev.map((d, i) =>
-          i === deckIdx ? { ...d, cards: d.cards.map((c) => ({ ...c, backSpriteId: id })) } : d,
+      const { groupIdx } = picker;
+      setGroups((prev) => {
+        const next = prev.map((g, i) =>
+          i === groupIdx ? { ...g, items: g.items.map((it) => ({ ...it, backSpriteId: id })) } : g,
         );
         return next;
       });
@@ -282,12 +282,12 @@ export default function ImportPage() {
       return;
     }
     if (picker?.type === "replace") {
-      const { deckIdx, cardIdx, face } = picker;
-      setDecks((prev) => {
-        const next = prev.map((d, i) =>
-          i === deckIdx
-            ? { ...d, cards: d.cards.map((c, j) => (j === cardIdx ? { ...c, [face]: id } : c)) }
-            : d,
+      const { groupIdx, itemIdx, face } = picker;
+      setGroups((prev) => {
+        const next = prev.map((g, i) =>
+          i === groupIdx
+            ? { ...g, items: g.items.map((it, j) => (j === itemIdx ? { ...it, [face]: id } : it)) }
+            : g,
         );
         return next;
       });
@@ -298,34 +298,34 @@ export default function ImportPage() {
   }
 
   /** 新建实体组：当前选中的图片 → 正面列表，随后进入选背面模式 */
-  function handleAddDeck() {
+  function handleAddGroup() {
     if (selected.size === 0) return;
-    const newDeck: Deck = { cards: Array.from(selected).map((id) => ({ frontSpriteId: id, backSpriteId: "" })) };
-    const next = [...decks, newDeck];
-    setDecks(next);
+    const newGroup: EntityGroup = { items: Array.from(selected).map((id) => ({ frontSpriteId: id, backSpriteId: "" })) };
+    const next = [...groups, newGroup];
+    setGroups(next);
     setSelected(new Set());
-    setPicker({ type: "back", deckIdx: next.length - 1 });
+    setPicker({ type: "back", groupIdx: next.length - 1 });
   }
 
-  function handleRemoveCard(deckIdx: number, cardIdx: number) {
-    setDecks((prev) => {
-      const next = prev.map((d, i) => (i === deckIdx ? { ...d, cards: d.cards.filter((_, j) => j !== cardIdx) } : d));
+  function handleRemoveItem(groupIdx: number, itemIdx: number) {
+    setGroups((prev) => {
+      const next = prev.map((g, i) => (i === groupIdx ? { ...g, items: g.items.filter((_, j) => j !== itemIdx) } : g));
       return next;
     });
   }
 
-  function handleRemoveDeck(deckIdx: number) {
-    setDecks((prev) => {
-      const next = prev.filter((_, i) => i !== deckIdx);
+  function handleRemoveGroup(groupIdx: number) {
+    setGroups((prev) => {
+      const next = prev.filter((_, i) => i !== groupIdx);
       return next;
     });
   }
 
   /** 正反面一样：组内每个实体 back = 自己的正面图（token/筹码场景） */
-  function handleSameFaces(deckIdx: number) {
-    setDecks((prev) =>
-      prev.map((d, i) =>
-        i === deckIdx ? { ...d, cards: d.cards.map((c) => ({ ...c, backSpriteId: c.frontSpriteId })) } : d,
+  function handleSameFaces(groupIdx: number) {
+    setGroups((prev) =>
+      prev.map((g, i) =>
+        i === groupIdx ? { ...g, items: g.items.map((it) => ({ ...it, backSpriteId: it.frontSpriteId })) } : g,
       ),
     );
     setPicker(null);
@@ -334,21 +334,21 @@ export default function ImportPage() {
   /** S5 页对预设：勾选页按顺序两两配对，全部合入**一个实体组**
    *  （正面 = 前页切图，背面 = 后页镜像图；奇数页最后一对无背面 = 默认卡背）
    *  前提：图片池为当前勾选页按序切割的结果（第 i 个勾选页的图在 [i*n, (i+1)*n)，n = 行×列） */
-  function handleAutoPairDecks() {
+  function handleAutoPairGroups() {
     if (sprites.length === 0) return;
     const n = rows * cols;
     const sorted = Array.from(selectedPages).sort((a, b) => a - b);
-    const cards: Deck["cards"] = [];
+    const items: EntityGroup["items"] = [];
     for (let i = 0; i < sorted.length; i += 2) {
       const frontBase = i * n;
       for (let k = 0; k < n; k++) {
-        cards.push({
+        items.push({
           frontSpriteId: `sprite-${frontBase + k}`,
           backSpriteId: i + 1 < sorted.length ? `sprite-${frontBase + n + mirrorBackIndex(k, cols)}` : "",
         });
       }
     }
-    setDecks((prev) => [...prev, { cards }]);
+    setGroups((prev) => [...prev, { items }]);
   }
 
   function togglePage(page: number) {
@@ -455,15 +455,15 @@ export default function ImportPage() {
               onSelectNone={() => setSelected(new Set())}
             />
           )}
-          <DeckBuilder
-            decks={decks}
+          <EntityGroupBuilder
+            groups={groups}
             sprites={sprites}
             picker={picker}
             selectedCount={selected.size}
-            onAddDeck={handleAddDeck}
-            onAutoPair={handleAutoPairDecks}
-            onRemoveCard={handleRemoveCard}
-            onRemoveDeck={handleRemoveDeck}
+            onAddGroup={handleAddGroup}
+            onAutoPair={handleAutoPairGroups}
+            onRemoveItem={handleRemoveItem}
+            onRemoveGroup={handleRemoveGroup}
             onSetPicker={setPicker}
             onSameFaces={handleSameFaces}
           />

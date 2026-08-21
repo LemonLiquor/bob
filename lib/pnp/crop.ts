@@ -69,12 +69,12 @@ export function mirrorBackIndex(frontIndex: number, cols: number): number {
 
 /** 单页对：正面裁切结果 + 背面裁切结果（null = 用默认卡背） */
 // ============================================================
-// 卡组摊平 — 页面内临时卡组结构 → prefabs / entities / piles
+// 实体组摊平 — 页面内临时实体组结构 → prefabs / entities / piles
 // ============================================================
 
-/** 卡组（页面内临时结构，不进协议/存储）：每卡引用图片池 sprite id */
-export interface Deck {
-  cards: { frontSpriteId: string; backSpriteId: string }[]; // backSpriteId 空串 = 默认卡背
+/** 实体组（页面内临时结构，不进协议/存储）：每组一个牌堆，每项引用图片池 sprite id */
+export interface EntityGroup {
+  items: { frontSpriteId: string; backSpriteId: string }[]; // backSpriteId 空串 = 默认卡背
 }
 
 /**
@@ -102,13 +102,13 @@ export async function toCircular(dataUrl: string): Promise<string> {
 }
 
 /**
- * 卡组摊平为引擎数据：
- * - prefabs：每卡一个，id `prefab-{n}` 连续，faces 引用 sprite id
+ * 实体组摊平为引擎数据：
+ * - prefabs：每项一个，id `prefab-{n}` 连续，faces 引用 sprite id
  * - entities：id `inst-{n}` 连续，坐标全 0（实际位置由牌堆承载，Lab 沙盒可调）
- * - piles：每卡组一个，id `pile-{ts+di}`，entityIds 按卡组内顺序，坐标全 0
+ * - piles：每组一个，id `pile-{ts+gi}`，entityIds 按组内顺序，坐标全 0
  * 只产结构，初始状态坐标由导入页 Lab 沙盒自定义。
  */
-export function buildGameFromDecks(decks: Deck[]): {
+export function buildGameFromGroups(groups: EntityGroup[]): {
   prefabs: Prefab[];
   entities: EntityState[];
   piles: Pile[];
@@ -118,15 +118,15 @@ export function buildGameFromDecks(decks: Deck[]): {
   const piles: Pile[] = [];
   const ts = Date.now();
   let n = 0;
-  for (let di = 0; di < decks.length; di++) {
+  for (let gi = 0; gi < groups.length; gi++) {
     const entityIds: string[] = [];
-    for (const card of decks[di].cards) {
-      prefabs.push({ id: `prefab-${n}`, faces: { front: card.frontSpriteId, back: card.backSpriteId } });
+    for (const item of groups[gi].items) {
+      prefabs.push({ id: `prefab-${n}`, faces: { front: item.frontSpriteId, back: item.backSpriteId } });
       entities.push({ id: `inst-${n}`, prefabId: `prefab-${n}`, faceUp: false, x: 0, y: 0, zIndex: 0 });
       entityIds.push(`inst-${n}`);
       n++;
     }
-    piles.push({ id: `pile-${ts + di}`, entityIds, x: 0, y: 0 });
+    piles.push({ id: `pile-${ts + gi}`, entityIds, x: 0, y: 0 });
   }
   return { prefabs, entities, piles };
 }
