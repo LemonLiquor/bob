@@ -4,7 +4,10 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { getPageCount, renderPageToCanvas } from "@/lib/pnp/pdf";
 import { cropGrid, buildGameFromDecks, DEFAULT_CROP, type CropConfig, type Deck } from "@/lib/pnp/crop";
-import type { Sprite } from "@/lib/engine/types";
+import type { GameAction, GameState, Sprite } from "@/lib/engine/types";
+import { applyAction } from "@/lib/engine";
+import { setAssets } from "@/lib/assets/cache";
+import GameBoard from "@/components/game/GameBoard";
 import PagePicker from "@/components/import/PagePicker";
 import CropParams from "@/components/import/CropParams";
 import PagePreviews from "@/components/import/PagePreviews";
@@ -55,6 +58,8 @@ export default function ImportPage() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [picker, setPicker] = useState<Picker>(null);
   const loadToken = useRef(0); // 防止换文件后旧预览乱序覆盖
+  const [view, setView] = useState<"import" | "lab">("import");
+  const [labState, setLabState] = useState<GameState | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -151,7 +156,7 @@ export default function ImportPage() {
     }
   }
 
-  /** 生成桌游数据 json（上传前预览；S4b Lab 调整坐标后更新 initialState） */
+  /** 生成桌游数据 json，并直接进入 Lab 沙盒调整初始布局 */
   function handleGenerate() {
     if (!file || sprites.length === 0 || !name.trim()) return;
     const { prefabs, entities, piles } = buildGameFromDecks(decks);
@@ -169,6 +174,35 @@ export default function ImportPage() {
       },
       initialState: payload.initialState,
     });
+    // 资产入缓存（Lab 渲染必需：getPrefabFaces 按 prefabId 查表）+ 直接进 Lab
+    setAssets(payload.assets);
+    setLabState(payload.initialState);
+    setView("lab");
+  }
+
+  /** S4b Lab：进入全屏沙盒（从最新 pendingUpload 初始化，含资产入缓存） */
+  function handleEnterLab() {
+    if (!pendingUpload) return;
+    setAssets(pendingUpload.assets);
+    setLabState(pendingUpload.initialState);
+    setView("lab");
+  }
+
+  /** S4b Lab：拖拽后的坐标写回 initialState（seats 保持无座） */
+  function handleSaveFromLab() {
+    if (!labState) return;
+    setPendingUpload((prev) => (prev ? { ...prev, initialState: { ...labState, seats: [] } } : prev));
+    setView("import");
+  }
+
+  /** S4b Lab：放弃本次调整，返回导入页（不写回） */
+  function handleDiscardLab() {
+    setView("import");
+  }
+
+  /** S4b Lab：本地 applyAction（复用引擎，与服务端同分发） */
+  function handleLabAction(action: GameAction) {
+    setLabState((prev) => (prev ? applyAction(prev, action) : prev));
   }
 
   /** 点击切换图片选中态 */
@@ -249,6 +283,26 @@ export default function ImportPage() {
     });
   }
 
+  // S4b Lab：全屏沙盒视图（无座，拖摆初始布局）
+  if (view === "lab" && labState) {
+    return (
+      // (main) 布局无全屏高度，h-screen 容器给 GameBoard 的 h-full 提供继承高度
+      <div className="h-screen">
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-card border-2 border-ink px-4 py-2">
+          <span className="text-sm font-bold">Lab — 调整初始布局</span>
+          <span className="text-[11px] text-muted">拖动卡牌/牌堆摆放初始位置（无座）</span>
+        </div>
+        <button className="btn-ghost fixed bottom-3 left-3 z-50 text-xs" onClick={handleDiscardLab}>
+          放弃返回
+        </button>
+        <button className="btn-pop fixed bottom-3 right-3 z-50 text-xs" onClick={handleSaveFromLab}>
+          保存并返回
+        </button>
+        <GameBoard gameState={labState} onAction={handleLabAction} />
+      </div>
+    );
+  }
+
   return (
     <main className="p-8 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4">
@@ -322,7 +376,8 @@ export default function ImportPage() {
         onNameChange={setName}
         canGenerate={!!file && sprites.length > 0 && !!name.trim()}
         onGenerate={handleGenerate}
-        pendingUpload={pendingUpload}
+        hasPending={!!pendingUpload}
+        onEnterLab={handleEnterLab}
       />
 
       {error && <p className="mt-2 text-red-500 text-sm">{error}</p>}
