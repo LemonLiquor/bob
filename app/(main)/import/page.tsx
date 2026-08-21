@@ -174,13 +174,22 @@ export default function ImportPage() {
   /** 生成桌游数据 json（坐标 0），资产入缓存后直接进入 Lab 沙盒调整初始布局 */
   function handleGenerate() {
     if (!file || sprites.length === 0 || !name.trim()) return;
-    const { prefabs, entities, piles } = buildGameFromGroups(groups);
+    const { prefabs, entities, piles } = buildGameFromGroups(groups, sizes);
     const payload: PendingUpload = {
       meta: { id: `pnp-${Date.now()}`, name: name.trim(), icon: "🖼️" },
       assets: { sprites, prefabs },
       initialState: { entities, piles, seats: [] },
     };
     setPendingUpload(payload);
+    // 验收打印：prefabs 含 size/singleFace，url 截断摘要
+    console.log("generated:", {
+      meta: payload.meta,
+      assets: {
+        sprites: payload.assets.sprites.map((s) => ({ id: s.id, url: s.url.slice(0, 60) + `…(${s.url.length})` })),
+        prefabs: payload.assets.prefabs,
+      },
+      initialState: payload.initialState,
+    });
     // 资产入缓存（Lab 渲染必需：getPrefabFaces 按 prefabId 查表）
     setAssets(payload.assets);
     setLabState(payload.initialState);

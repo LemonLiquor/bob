@@ -104,12 +104,16 @@ export async function toCircular(dataUrl: string): Promise<string> {
 
 /**
  * 实体组摊平为引擎数据：
- * - prefabs：每项一个，id `prefab-{n}` 连续；单面组 → singleFace: true 且 back 空
+ * - prefabs：每项一个，id `prefab-{n}` 连续；单面组 → singleFace: true 且 back 空；
+ *   sizes 中按正面 spriteId 查到渲染尺寸 → 带 size，否则缺省（120×168 卡牌）
  * - entities：id `inst-{n}` 连续，坐标全 0（实际位置由牌堆承载，Lab 沙盒可调）
  * - piles：每组一个，id `pile-{ts+gi}`，entityIds 按组内顺序，坐标全 0
  * 只产结构，初始状态坐标由导入页 Lab 沙盒自定义。
  */
-export function buildGameFromGroups(groups: EntityGroup[]): {
+export function buildGameFromGroups(
+  groups: EntityGroup[],
+  sizes?: Map<string, { width: number; height: number }>,
+): {
   prefabs: Prefab[];
   entities: EntityState[];
   piles: Pile[];
@@ -123,10 +127,12 @@ export function buildGameFromGroups(groups: EntityGroup[]): {
     const group = groups[gi];
     const entityIds: string[] = [];
     for (const item of group.items) {
+      const size = sizes?.get(item.frontSpriteId);
       prefabs.push({
         id: `prefab-${n}`,
         faces: { front: item.frontSpriteId, back: group.singleFace ? "" : item.backSpriteId },
         ...(group.singleFace ? { singleFace: true } : {}),
+        ...(size ? { size } : {}),
       });
       entities.push({ id: `inst-${n}`, prefabId: `prefab-${n}`, faceUp: false, x: 0, y: 0, zIndex: 0 });
       entityIds.push(`inst-${n}`);

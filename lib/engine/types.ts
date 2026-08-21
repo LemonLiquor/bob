@@ -19,6 +19,7 @@ export interface Prefab {
     back: string;      // 背面 sprite id（空串 = 无背面，渲染回退默认卡背）
   };
   singleFace?: boolean; // 单面实体（正反面一样）：永远显示正面，F 翻面无效果
+  size?: { width: number; height: number }; // 渲染尺寸（桌面 px），缺省 120×168 卡牌
 }
 
 /** 桌游资产集合：纯美术资源（图片表 + 模板表） */
