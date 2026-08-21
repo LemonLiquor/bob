@@ -214,6 +214,16 @@ export function shufflePile(state: GameState, pileId: string): GameState {
   };
 }
 
+/** 移动整个牌堆到桌面坐标 (x, y)。不可变更新 */
+export function movePile(state: GameState, pileId: string, x: number, y: number): GameState {
+  const pile = state.piles.find((p) => p.id === pileId);
+  if (!pile) return state;
+  return {
+    ...state,
+    piles: state.piles.map((p) => (p.id === pileId ? { ...p, x, y } : p)),
+  };
+}
+
 /** 翻转指定卡牌的朝向。不可变更新 */
 export function flipCard(state: GameState, cardId: string): GameState {
   const cardIndex = state.entities.findIndex((e) => e.id === cardId);

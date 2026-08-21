@@ -3,13 +3,15 @@
 // ============================================================
 
 import type { EntityState, GameAction, GameState } from "./types";
-import { moveCard, moveCardToHand, flipCard, shufflePile } from "./actions";
+import { moveCard, moveCardToHand, flipCard, shufflePile, movePile } from "./actions";
 
 /** 动作分发：纯函数，GameBoard 与服务端共用 */
 export function applyAction(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case "move_card":
       return moveCard(state, action.cardId, action.x, action.y);
+    case "move_pile":
+      return movePile(state, action.pileId, action.x, action.y);
     case "move_to_hand":
       return moveCardToHand(state, action.cardId, action.seatId);
     case "flip_card":

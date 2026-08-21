@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -87,30 +87,73 @@ export default function GameBoard({ gameState: propState, onAction, initialState
   }, [dispatch]);
 
   const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef<{ cardId: string; x: number; y: number } | null>(null);
+  const [shiftHeld, setShiftHeld] = useState(false); // Shift 按住 = 整堆移动模式
+  const dragStartRef = useRef<
+    | { kind: "card"; cardId: string; x: number; y: number }
+    | { kind: "pile"; pileId: string; x: number; y: number }
+    | null
+  >(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor),
   );
 
+  // Shift 按住/松开 → 切换整堆移动模式；失焦时重置（防止卡住）
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Shift") setShiftHeld(true);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Shift") setShiftHeld(false);
+    };
+    const onBlur = () => setShiftHeld(false);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, []);
+
   function handleDragStart(event: DragStartEvent) {
-    const cardId = String(event.active.id);
-    // 视觉坐标（视口坐标 = 桌面坐标）：自由牌 / pile 顶牌 / 手牌区牌通用
-    const el = document.getElementById(cardId);
-    const rect = el?.getBoundingClientRect();
-    dragStartRef.current = { cardId, x: rect?.left ?? 0, y: rect?.top ?? 0 };
+    const id = String(event.active.id);
+    if (id.startsWith("pile-move-")) {
+      // 整堆拖动：取容器位置作起点
+      const pileId = id.slice("pile-move-".length);
+      const el = document.getElementById(`pile-${pileId}`);
+      const rect = el?.getBoundingClientRect();
+      dragStartRef.current = { kind: "pile", pileId, x: rect?.left ?? 0, y: rect?.top ?? 0 };
+    } else {
+      // 卡：视觉坐标（视口坐标 = 桌面坐标）：自由牌 / pile 顶牌 / 手牌区牌通用
+      const el = document.getElementById(id);
+      const rect = el?.getBoundingClientRect();
+      dragStartRef.current = { kind: "card", cardId: id, x: rect?.left ?? 0, y: rect?.top ?? 0 };
+    }
     setIsDragging(true);
   }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    const cardId = String(active.id);
     const start = dragStartRef.current;
     dragStartRef.current = null;
     setIsDragging(false);
     if (!start) return;
 
+    const translated = active.rect.current.translated;
+    if (!translated) return;
+
+    // 整堆移动：防误触（几乎没移动则不处理）
+    if (start.kind === "pile") {
+      if (Math.abs(translated.left - start.x) > 2 || Math.abs(translated.top - start.y) > 2) {
+        dispatch({ type: "move_pile", pileId: start.pileId, x: translated.left, y: translated.top });
+      }
+      return;
+    }
+
+    const cardId = start.cardId;
     const overId = over ? String(over.id) : null;
 
     // 手牌区（自己的或他人的，沙盒允许拖入任何座位）
@@ -120,7 +163,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
     }
 
     // 牌堆：对齐 pile 中心
-    if (overId && overId.startsWith("pile-")) {
+    if (overId && overId.startsWith("pile-") && !overId.startsWith("pile-move-")) {
       const pile = gameState.piles.find((p) => p.id === overId);
       if (pile) {
         dispatch({ type: "move_card", cardId, x: pile.x, y: pile.y });
@@ -130,14 +173,11 @@ export default function GameBoard({ gameState: propState, onAction, initialState
 
     // 桌面：落点 = 拖拽中真实位置（translated，含 transform，与视觉一致）
     // （游戏页全屏布局下 main 左上角 = 视口 (0,0)，视口坐标 = 桌面坐标，无需换算）
-    const translated = active.rect.current.translated;
-    if (translated) {
-      const x = translated.left;
-      const y = translated.top;
-      // 防误触：几乎没移动则不处理
-      if (Math.abs(x - start.x) > 2 || Math.abs(y - start.y) > 2) {
-        dispatch({ type: "move_card", cardId, x, y });
-      }
+    const x = translated.left;
+    const y = translated.top;
+    // 防误触：几乎没移动则不处理
+    if (Math.abs(x - start.x) > 2 || Math.abs(y - start.y) > 2) {
+      dispatch({ type: "move_card", cardId, x, y });
     }
   }
 
@@ -183,6 +223,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
               pile={pile}
               cards={findCards(gameState, pile.entityIds)}
               onShuffle={handleShufflePile}
+              shiftHeld={shiftHeld}
             />
           ))}
 

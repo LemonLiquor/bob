@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { Pile as PileType, EntityState } from "@/lib/engine";
-import { useDroppable } from "@dnd-kit/core";
+import { useDroppable, useDraggable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import { stackLayout } from "@/lib/engine/layout";
 import Card from "./Card";
 
@@ -10,10 +11,18 @@ interface PileProps {
   pile: PileType;
   cards: EntityState[];  // 按从下到上顺序
   onShuffle: (pileId: string) => void;
+  shiftHeld: boolean; // Shift 按住 → 顶牌禁拖，整堆 draggable 接管（整体移动）
 }
 
-export default function Pile({ pile, cards, onShuffle }: PileProps) {
-  const { isOver, setNodeRef } = useDroppable({ id: pile.id });
+export default function Pile({ pile, cards, onShuffle, shiftHeld }: PileProps) {
+  // 容器同时是 droppable（牌拖入堆）与 draggable（整堆移动）：
+  // - 非 Shift 拖顶牌 → 顶牌 draggable 激活（单牌）
+  // - Shift 按住 → 顶牌 disabled → sensor 向上找到容器 → 整堆
+  // - 拖下层牌偏移区 → 无 draggable → 容器 → 整堆（TTS 式）
+  const { isOver, setNodeRef: setDropNodeRef } = useDroppable({ id: pile.id });
+  const { setNodeRef: setDragNodeRef, transform, isDragging: isPileDragging, listeners } = useDraggable({
+    id: `pile-move-${pile.id}`,
+  });
   const [isHovered, setIsHovered] = useState(false);
 
   const count = cards.length;
@@ -37,24 +46,33 @@ export default function Pile({ pile, cards, onShuffle }: PileProps) {
   // hover / 拖拽悬停：黑虚线框变红（不叠加 ring / 实线框）
   const overClass = isOver || isHovered ? "dashed-zone-active" : "dashed-zone";
 
-  const containerClass = `absolute rounded-lg transition-[border,background] duration-150 ${overClass}`;
+  const containerClass = `absolute rounded-lg transition-[border,background] duration-150 ${overClass} ${isPileDragging ? "shadow-[0_8px_24px_rgba(0,0,0,0.25)]" : ""}`;
+
+  // draggable + droppable 共用一个节点；listeners/attributes 只挂 [移动] 把手（handle 模式）
+  const setRefs = (el: HTMLDivElement | null) => {
+    setDropNodeRef(el);
+    setDragNodeRef(el);
+  };
 
   const containerStyle: React.CSSProperties = {
     left: pile.x,
     top: pile.y,
     width: 120,
     height: 168,
+    transform: CSS.Translate.toString(transform),
   };
 
   return (
     <div
-      ref={setNodeRef}
-      className={containerClass}
+      id={`pile-${pile.id}`}
+      ref={setRefs}
+      {...listeners}
+      className={`${containerClass}`}
       style={containerStyle}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* 堆叠的牌：只有顶部可拖 */}
+      {/* 堆叠的牌：只有顶部可拖（Shift 按住时顶牌禁拖，交给容器整堆） */}
       {cards.map((card, i) => (
         <div
           key={card.id}
@@ -64,9 +82,16 @@ export default function Pile({ pile, cards, onShuffle }: PileProps) {
             top: offsets[i].offsetY,
           }}
         >
-          <Card card={card} draggable={i === count - 1} />
+          <Card card={card} draggable={i === count - 1 && !shiftHeld} />
         </div>
       ))}
+
+      {/* hover 顶部提示：整体移动 */}
+      {isHovered && count > 1 && (
+        <span className="absolute -top-7 left-1/2 -translate-x-1/2 text-[11px] text-muted bg-card/90 rounded px-1.5 py-0.5 shadow whitespace-nowrap pointer-events-none">
+          Shift+拖 移动整堆
+        </span>
+      )}
 
       {/* 张数角标 */}
       <div className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1 rounded-full bg-ink text-surface text-[11px] flex items-center justify-center shadow">
