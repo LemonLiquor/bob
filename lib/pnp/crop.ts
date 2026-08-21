@@ -75,6 +75,7 @@ export function mirrorBackIndex(frontIndex: number, cols: number): number {
 /** 实体组（页面内临时结构，不进协议/存储）：每组一个牌堆，每项引用图片池 sprite id */
 export interface EntityGroup {
   items: { frontSpriteId: string; backSpriteId: string }[]; // backSpriteId 空串 = 默认卡背
+  singleFace?: boolean; // 组级：单面实体（正反面一样）→ prefab singleFace: true 且 back 空
 }
 
 /**
@@ -103,7 +104,7 @@ export async function toCircular(dataUrl: string): Promise<string> {
 
 /**
  * 实体组摊平为引擎数据：
- * - prefabs：每项一个，id `prefab-{n}` 连续，faces 引用 sprite id
+ * - prefabs：每项一个，id `prefab-{n}` 连续；单面组 → singleFace: true 且 back 空
  * - entities：id `inst-{n}` 连续，坐标全 0（实际位置由牌堆承载，Lab 沙盒可调）
  * - piles：每组一个，id `pile-{ts+gi}`，entityIds 按组内顺序，坐标全 0
  * 只产结构，初始状态坐标由导入页 Lab 沙盒自定义。
@@ -119,9 +120,14 @@ export function buildGameFromGroups(groups: EntityGroup[]): {
   const ts = Date.now();
   let n = 0;
   for (let gi = 0; gi < groups.length; gi++) {
+    const group = groups[gi];
     const entityIds: string[] = [];
-    for (const item of groups[gi].items) {
-      prefabs.push({ id: `prefab-${n}`, faces: { front: item.frontSpriteId, back: item.backSpriteId } });
+    for (const item of group.items) {
+      prefabs.push({
+        id: `prefab-${n}`,
+        faces: { front: item.frontSpriteId, back: group.singleFace ? "" : item.backSpriteId },
+        ...(group.singleFace ? { singleFace: true } : {}),
+      });
       entities.push({ id: `inst-${n}`, prefabId: `prefab-${n}`, faceUp: false, x: 0, y: 0, zIndex: 0 });
       entityIds.push(`inst-${n}`);
       n++;

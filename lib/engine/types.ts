@@ -18,6 +18,7 @@ export interface Prefab {
     front: string;     // 正面 sprite id
     back: string;      // 背面 sprite id（空串 = 无背面，渲染回退默认卡背）
   };
+  singleFace?: boolean; // 单面实体（正反面一样）：永远显示正面，F 翻面无效果
 }
 
 /** 桌游资产集合：纯美术资源（图片表 + 模板表） */

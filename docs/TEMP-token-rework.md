@@ -10,12 +10,14 @@
 ## 数据契约
 
 ```
-Prefab = { id, faces: { front, back }, size?: { width, height } }  // size 缺省 120×168 = 卡牌
+Prefab = { id, faces: { front, back }, size?: { width, height }, singleFace?: boolean }
 ```
 
-- `size` 可选 → 旧数据零迁移（loadAll 格式校验不变）
+- `size` 可选 → 旧数据零迁移（loadAll 格式校验不变）；缺省 120×168 = 卡牌
+- `singleFace?: boolean`（缺省 false = 卡牌双面）：true = **永远显示正面图，F 翻面无效果**，`back` 置空（不再重复引用同一 sprite）；版图/米宝等单面实体未来同字段适用
 - **不引入 shape 字段**：圆形在实体定义面板用 canvas 圆形遮罩生成**透明背景 PNG**，渲染层只有矩形 + 透明图，无形状分支
 - 每张切图的信息 = 形状（矩形/圆形）+ 切割大小（裁剪像素，只读）+ 实际渲染大小（桌面显示尺寸，可设）
+- 骰子等多面实体（faces 数组化 + faceIndex）为更大重构，本次不做（列入后续需求）
 
 ## 页面结构（新面板位置）
 
@@ -61,7 +63,7 @@ Prefab = { id, faces: { front, back }, size?: { width, height } }  // size 缺�
 **能力**：生成 json 时 prefab 带 `size`（来自实体定义面板的渲染大小；未设置 = 无 size 字段，卡牌默认）。
 
 **改**：
-- `lib/pnp/crop.ts`：`buildGameFromDecks(decks, sizes?: Map<string, { width: number; height: number }>)`——摊平 prefab 时按卡正面 spriteId 查 sizes，查到则带 `size`，否则不带
+- `lib/pnp/crop.ts`：`buildGameFromGroups(groups, sizes?: Map<string, { width: number; height: number }>)`——摊平 prefab 时按项正面 spriteId 查 sizes，查到则带 `size`，否则不带
 - `app/(main)/import/page.tsx`：`handleGenerate` 传入 sizeMap
 - 自动正反交替组卡：不涉及（sprite 的尺寸由面板定义，自动继承）
 

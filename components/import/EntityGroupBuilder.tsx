@@ -106,9 +106,16 @@ export default function EntityGroupBuilder({
                   <button
                     className={`relative w-10 h-14 border-2 overflow-hidden bg-[#1e3a5f] ${isPicking(gi, ii, "back") ? "animate-pulse border-red-500" : "border-transparent hover:border-secondary"}`}
                     onClick={() => onSetPicker({ type: "replace", groupIdx: gi, itemIdx: ii, face: "back" })}
-                    title="点击替换背面"
+                    title={group.singleFace ? "单面实体（正反同图）" : "点击替换背面"}
                   >
-                    {item.backSpriteId ? (
+                    {group.singleFace ? (
+                      // 单面组：背面 = 正面图（永远显示正面）
+                      spriteUrl(item.frontSpriteId) ? (
+                        <img src={spriteUrl(item.frontSpriteId)} alt="背面" className="w-full h-full object-contain" />
+                      ) : (
+                        <div className="w-full h-full bg-[#1e3a5f]" />
+                      )
+                    ) : item.backSpriteId ? (
                       spriteUrl(item.backSpriteId) ? (
                         <img src={spriteUrl(item.backSpriteId)} alt="背面" className="w-full h-full object-contain" />
                       ) : (
@@ -121,7 +128,7 @@ export default function EntityGroupBuilder({
                     )}
                   </button>
                   <span className="text-[10px] font-mono text-secondary flex-1">
-                    {item.frontSpriteId} / {item.backSpriteId || "默认卡背"}
+                    {item.frontSpriteId} / {group.singleFace ? "单面" : item.backSpriteId || "默认卡背"}
                   </span>
                   <button className="link-pop text-[11px] text-red-500" onClick={() => onRemoveItem(gi, ii)}>
                     ✕

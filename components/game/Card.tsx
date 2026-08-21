@@ -1,7 +1,7 @@
 "use client";
 
 import type { EntityState } from "@/lib/engine";
-import { getPrefabFaces } from "@/lib/assets/cache";
+import { getPrefabFaces, getPrefabSingleFace } from "@/lib/assets/cache";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { useHoverable } from "@/lib/engine/card-action";
@@ -25,9 +25,11 @@ export default function Card({ card, children, draggable = false }: CardProps) {
 
   const faceClass = card.faceUp ? "bg-white text-black" : "bg-[#1e3a5f] text-white";
   // 一级查表：prefabId → [正面, 背面]（进房时一次性入缓存），faceUp 决定取哪个面
+  // 单面实体：永远显示正面（F 翻面无效果）
   const faces = getPrefabFaces(card.prefabId);
-  const frontSrc = card.faceUp ? faces?.[0] : undefined;
-  const backSrc = card.faceUp ? undefined : faces?.[1];
+  const singleFace = getPrefabSingleFace(card.prefabId);
+  const frontSrc = singleFace || card.faceUp ? faces?.[0] : undefined;
+  const backSrc = singleFace ? undefined : card.faceUp ? undefined : faces?.[1];
   const shadowClass = isDragging
     ? "shadow-[0_8px_24px_rgba(0,0,0,0.25)]"
     : "shadow-[0_2px_8px_rgba(0,0,0,0.15)]";

@@ -38,6 +38,11 @@ export class AssetLibrary {
     if (!front) return undefined;
     return [front.url, this.sprites.get(prefab.faces.back)?.url ?? ""];
   }
+
+  /** 单面实体（永远显示正面，F 翻面无效果） */
+  getPrefabSingleFace(prefabId: string): boolean {
+    return this.prefabs.get(prefabId)?.singleFace ?? false;
+  }
 }
 
 let library: AssetLibrary | null = null;
@@ -50,4 +55,9 @@ export function setAssets(assets: GameAssets): void {
 /** 按 prefab id 取正反 url（渲染用）。未填充或不存在返回 undefined */
 export function getPrefabFaces(prefabId: string): [string, string] | undefined {
   return library?.getPrefabFaces(prefabId);
+}
+
+/** 按 prefab id 取单面标记（true = 永远显示正面） */
+export function getPrefabSingleFace(prefabId: string): boolean {
+  return library?.getPrefabSingleFace(prefabId) ?? false;
 }
