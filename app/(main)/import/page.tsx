@@ -1,59 +1,44 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { send, onMessage } from "@/lib/multiplayer/transport";
 import { getPageCount, renderPageToCanvas } from "@/lib/pnp/pdf";
-import { cropGrid, buildPnpAssetsMulti, DEFAULT_CROP, type CropConfig } from "@/lib/pnp/crop";
-import type { ServerMessage } from "@/lib/multiplayer/protocol";
+import { cropGrid, DEFAULT_CROP, type CropConfig } from "@/lib/pnp/crop";
+import type { Sprite } from "@/lib/engine/types";
 import CropInput from "@/components/import/CropInput";
 import GridPreview, { type PreviewData } from "@/components/import/GridPreview";
 
-/** 页对：正面页 + 背面页（物理打印正反交替：1正2反3正4反…） */
-interface PagePair {
-  frontPage: number;       // 1-based
-  backPage: number | null; // 1-based，null = 无背面（默认卡背）
-  enabled: boolean;
+// ============================================================
+// PnP PDF 导入页（S1：切图 → 图片资源池）
+// 选 PDF → 全局切割参数 → 切割全部页 → 图片池（Sprite[]，id sprite-{n} 连续）
+// 后续步骤：S2 页面多选 / S3 卡组组装 / S4 上传
+// ============================================================
+
+/** 验收打印：url 截断摘要，避免 dataURL 刷屏 */
+function logSprites(sprites: Sprite[]): void {
+  console.log("sprites:", {
+    count: sprites.length,
+    list: sprites.map((s) => ({
+      id: s.id,
+      url: s.url.slice(0, 60) + `…(${s.url.length})`,
+    })),
+  });
 }
 
-// ============================================================
-// PnP PDF 导入页（独立页面，便于后续扩展 PDF 功能）
-// 多页正反交替 PDF 一次性导入：全部页对裁切后合成一个桌游
-// 全局参数（行/列/边距/间隔）对所有页对生效，预览格子线实时对齐
-// ============================================================
-
 export default function ImportPage() {
-  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [rows, setRows] = useState(4);
   const [cols, setCols] = useState(4);
-  const [name, setName] = useState("");
   const [crop, setCrop] = useState<CropConfig>(DEFAULT_CROP);
-  const [pairs, setPairs] = useState<PagePair[]>([]);
-  const [previews, setPreviews] = useState<{ front: PreviewData | null; back: PreviewData | null }[]>([]);
+  const [sprites, setSprites] = useState<Sprite[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [previews, setPreviews] = useState<(PreviewData | null)[]>([]);
+  const loadToken = useRef(0); // 防止换文件后旧预览乱序覆盖
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const pendingGameId = useRef<string | null>(null);
-  const loadToken = useRef(0); // 防止换文件后旧预览乱序覆盖
-
-  // 上传成功（匹配 gameId）→ 跳回游戏广场（列表自动刷新）
-  useEffect(() => {
-    const unsub = onMessage((msg: ServerMessage) => {
-      if (msg.type === "game_uploaded" && msg.gameId === pendingGameId.current) {
-        pendingGameId.current = null;
-        router.push("/games");
-      } else if (msg.type === "error" && pendingGameId.current) {
-        pendingGameId.current = null;
-        setError("上传失败，请重试");
-        setBusy(false);
-      }
-    });
-    return unsub;
-  }, [router]);
 
   async function loadPreview(f: File, page: number): Promise<PreviewData> {
     const canvas = await renderPageToCanvas(f, page);
@@ -62,27 +47,6 @@ export default function ImportPage() {
       width: canvas.width,
       height: canvas.height,
     };
-  }
-
-  /** 正反交替识别：页对 = (1,2),(3,4),…；奇数页最后一页无背面 */
-  function buildPairs(count: number): PagePair[] {
-    const list: PagePair[] = [];
-    for (let i = 1; i <= count; i += 2) {
-      list.push({ frontPage: i, backPage: i + 1 <= count ? i + 1 : null, enabled: true });
-    }
-    return list;
-  }
-
-  async function reloadPairPreview(idx: number) {
-    if (!file) return;
-    const pair = pairs[idx];
-    try {
-      const front = await loadPreview(file, pair.frontPage);
-      const back = pair.backPage != null ? await loadPreview(file, pair.backPage) : null;
-      setPreviews((prev) => prev.map((p, i) => (i === idx ? { front, back } : p)));
-    } catch (e) {
-      setError(`页面渲染失败: ${(e as Error).message}`);
-    }
   }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -95,50 +59,33 @@ export default function ImportPage() {
     }
 
     setFile(f);
-    setName(f.name.replace(/\.pdf$/i, ""));
     setError(null);
     setBusy(true);
     try {
       const count = await getPageCount(f);
       setPageCount(count);
-      const list = buildPairs(count);
-      setPairs(list);
-      setPreviews(list.map(() => ({ front: null, back: null })));
+      setSprites([]);
+      setSelected(new Set());
+      setPreviews(new Array(count).fill(null));
 
-      // 逐对加载预览（token 防乱序：换文件后旧异步结果丢弃）
+      // 全部页预览（token 防乱序：换文件后旧异步结果丢弃）
       const token = ++loadToken.current;
-      for (let i = 0; i < list.length; i++) {
-        const pair = list[i];
-        const p: { front: PreviewData | null; back: PreviewData | null } = { front: null, back: null };
+      for (let page = 1; page <= count; page++) {
+        setProgress(`正在加载预览 第 ${page}/${count} 页...`);
         try {
-          p.front = await loadPreview(f, pair.frontPage);
-        } catch { /* 单页失败不中断 */ }
-        if (pair.backPage != null) {
-          try {
-            p.back = await loadPreview(f, pair.backPage);
-          } catch { /* 单页失败不中断 */ }
+          const p = await loadPreview(f, page);
+          if (loadToken.current !== token) return; // 已换文件，丢弃
+          setPreviews((prev) => prev.map((x, i) => (i === page - 1 ? p : x)));
+        } catch {
+          /* 单页失败不中断 */
         }
-        if (loadToken.current !== token) return; // 已换文件，丢弃
-        setPreviews((prev) => prev.map((x, idx) => (idx === i ? p : x)));
       }
     } catch (err) {
       setError(`PDF 解析失败: ${(err as Error).message}`);
     } finally {
       setBusy(false);
+      setProgress("");
     }
-  }
-
-  function handlePairPageChange(idx: number, kind: "front" | "back", value: string) {
-    const v = value === "" ? 0 : Number(value);
-    const next = { ...pairs[idx] };
-    if (kind === "front") next.frontPage = v;
-    else next.backPage = value === "none" ? null : v;
-    setPairs((prev) => prev.map((p, i) => (i === idx ? next : p)));
-    reloadPairPreview(idx);
-  }
-
-  function handlePairEnabled(idx: number, enabled: boolean) {
-    setPairs((prev) => prev.map((p, i) => (i === idx ? { ...p, enabled } : p)));
   }
 
   function handleGridChange(kind: "rows" | "cols", value: string) {
@@ -152,41 +99,40 @@ export default function ImportPage() {
     setCrop((prev) => ({ ...prev, [kind]: v }));
   }
 
-  /** 全部启用页对裁切 → 合成一个桌游 → 上传 */
-  async function handleImport() {
-    if (!file || !name.trim()) return;
+  /** 切割全部页 → 图片资源池（sprite id 全局连续） */
+  async function handleCrop() {
+    if (!file) return;
     setBusy(true);
     setError(null);
-    setProgress("");
+    const list: Sprite[] = [];
     try {
-      const active = pairs.filter((p) => p.enabled);
-      const pagePairs: { frontDataUrls: string[]; backDataUrls: string[] | null }[] = [];
-      for (let i = 0; i < active.length; i++) {
-        const pair = active[i];
-        setProgress(`正在裁切页对 ${i + 1}/${active.length}...`);
-        const frontCanvas = await renderPageToCanvas(file, pair.frontPage);
-        const frontDataUrls = cropGrid(frontCanvas, rows, cols, crop);
-        let backDataUrls: string[] | null = null;
-        if (pair.backPage != null) {
-          const backCanvas = await renderPageToCanvas(file, pair.backPage);
-          backDataUrls = cropGrid(backCanvas, rows, cols, crop);
+      for (let page = 1; page <= pageCount; page++) {
+        setProgress(`正在切割第 ${page}/${pageCount} 页...`);
+        const canvas = await renderPageToCanvas(file, page);
+        const urls = cropGrid(canvas, rows, cols, crop);
+        for (const url of urls) {
+          list.push({ id: `sprite-${list.length}`, url });
         }
-        pagePairs.push({ frontDataUrls, backDataUrls });
       }
-
-      setProgress("正在上传...");
-      const { meta, assets } = await buildPnpAssetsMulti({
-        name: name.trim(),
-        cols,
-        pagePairs,
-      });
-      pendingGameId.current = meta.id;
-      send({ type: "upload_game", meta, assets });
+      setSprites(list);
+      setSelected(new Set());
+      logSprites(list);
     } catch (err) {
-      setError(`导入失败: ${(err as Error).message}`);
+      setError(`切割失败: ${(err as Error).message}`);
+    } finally {
       setBusy(false);
       setProgress("");
     }
+  }
+
+  /** 点击切换图片选中态（S3 组卡用） */
+  function toggleSprite(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   return (
@@ -205,12 +151,12 @@ export default function ImportPage() {
         onClick={() => fileRef.current?.click()}
         disabled={busy}
       >
-        {file ? `📄 ${file.name}（${pageCount} 页 → ${pairs.length} 个页对）` : "点击选择 .pdf 文件（正反交替多页）"}
+        {file ? `📄 ${file.name}（${pageCount} 页）` : "点击选择 .pdf 文件"}
       </button>
 
       {file && (
         <>
-          {/* 全局参数 */}
+          {/* 全局切割参数 */}
           <div className="flex flex-wrap items-end gap-3 mb-3 p-3 border-2 border-ink">
             <label className="text-xs text-secondary flex flex-col gap-1">
               行数
@@ -240,92 +186,55 @@ export default function ImportPage() {
               <CropInput label="横" value={crop.gapX} onChange={(v) => handleCropChange("gapX", v)} />
               <CropInput label="纵" value={crop.gapY} onChange={(v) => handleCropChange("gapY", v)} />
             </div>
-            <label className="text-xs text-secondary flex flex-col gap-1 flex-1 min-w-[160px]">
-              游戏名
-              <input
-                className="input-pop"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="我的桌游"
-              />
-            </label>
+            <button
+              className="btn-pop text-sm"
+              onClick={handleCrop}
+              disabled={busy || !file}
+            >
+              {busy ? "切割中..." : "切割全部页"}
+            </button>
           </div>
 
-          {/* 页对列表（正反交替） */}
-          <div className="flex flex-col gap-4">
-            {pairs.map((pair, idx) => (
-              <div key={idx} className={`border-2 border-ink p-3 ${pair.enabled ? "" : "opacity-50"}`}>
-                <div className="flex flex-wrap items-center gap-3 mb-2">
-                  <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={pair.enabled}
-                      onChange={(e) => handlePairEnabled(idx, e.target.checked)}
-                    />
-                    页对 {idx + 1}
-                  </label>
-                  <label className="text-xs text-secondary flex items-center gap-1">
-                    正面页
-                    <select
-                      className="border rounded px-2 py-1 text-sm"
-                      value={pair.frontPage}
-                      onChange={(e) => handlePairPageChange(idx, "front", e.target.value)}
-                    >
-                      {Array.from({ length: pageCount }).map((_, i) => (
-                        <option key={i} value={i + 1}>第 {i + 1} 页</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-xs text-secondary flex items-center gap-1">
-                    背面页
-                    <select
-                      className="border rounded px-2 py-1 text-sm"
-                      value={pair.backPage ?? "none"}
-                      onChange={(e) => handlePairPageChange(idx, "back", e.target.value)}
-                    >
-                      <option value="none">无（默认卡背）</option>
-                      {Array.from({ length: pageCount }).map((_, i) => (
-                        <option key={i} value={i + 1}>第 {i + 1} 页</option>
-                      ))}
-                    </select>
-                  </label>
-                  <span className="text-[11px] text-muted">
-                    共 {rows * cols} 张卡（双面打印：正面第 i 行第 j 列 ↔ 背面第 i 行第 {cols} 列）
-                  </span>
+          {/* 全部页预览（格子线按当前参数实时计算） */}
+          <div className="mb-3 p-3 border-2 border-ink">
+            <p className="text-sm font-medium mb-2">页面预览（{pageCount} 页，调参实时对齐格子线）</p>
+            <div className="flex flex-wrap gap-4">
+              {previews.map((p, i) => (
+                <div key={i} className="w-[240px]">
+                  <GridPreview prev={p} label={`第 ${i + 1} 页`} rows={rows} cols={cols} crop={crop} />
                 </div>
-                <div className="flex gap-4">
-                  <GridPreview prev={previews[idx]?.front ?? null} label="正面" rows={rows} cols={cols} crop={crop} />
-                  <GridPreview prev={previews[idx]?.back ?? null} label="背面" rows={rows} cols={cols} crop={crop} />
-                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 图片池 */}
+          {sprites.length > 0 && (
+            <div className="border-2 border-ink p-3">
+              <p className="text-sm font-medium mb-2">
+                图片池（{sprites.length} 张，选中 {selected.size} 张）
+              </p>
+              <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))" }}>
+                {sprites.map((s, i) => {
+                  const isSel = selected.has(s.id);
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => toggleSprite(s.id)}
+                      className={`relative flex flex-col items-center gap-1 p-1 border-2 bg-card transition-colors ${isSel ? "border-red-500 ring-2 ring-red-500/30" : "border-ink hover:border-secondary"}`}
+                    >
+                      <img src={s.url} alt={s.id} className="w-full h-[112px] object-cover" />
+                      <span className="text-[10px] font-mono text-secondary">{s.id}</span>
+                    </button>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-
-          <p className="text-[11px] text-muted mt-3">
-            提示：全部页对将合成一个桌游（共 {pairs.filter((p) => p.enabled).length * rows * cols} 张卡）；调整边距/间隔使红线对齐卡牌边缘
-          </p>
+            </div>
+          )}
         </>
       )}
 
       {error && <p className="mt-2 text-red-500 text-sm">{error}</p>}
       {progress && <p className="mt-2 text-secondary text-sm">{progress}</p>}
-
-      <div className="flex justify-end gap-2 mt-4">
-        <Link
-          href="/games"
-          className="btn-ghost text-sm"
-        >
-          取消
-        </Link>
-        <button
-          className="btn-pop text-sm"
-          disabled={!file || busy || !name.trim()}
-          onClick={handleImport}
-        >
-          {busy ? "导入中..." : `导入 ${pairs.filter((p) => p.enabled).length * rows * cols} 张卡（1 个桌游）`}
-        </button>
-      </div>
     </main>
   );
 }
-
