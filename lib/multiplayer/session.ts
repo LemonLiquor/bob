@@ -12,6 +12,7 @@ interface Session {
   creatorId: string; // 房主：ESC 面板重新开始按钮权限
   players: PlayerInfo[];
   gameState: GameState;
+  initialState: GameState; // 无座存档版（重新开始用）
   assets: GameAssets;
 }
 

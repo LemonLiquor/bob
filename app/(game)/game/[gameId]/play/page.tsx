@@ -8,14 +8,13 @@ import GameControlPanel from "@/components/game/GameControlPanel";
 import { getStatus, onStatusChange } from "@/lib/multiplayer/connection";
 import { send, onMessage } from "@/lib/multiplayer/transport";
 import { setAssets } from "@/lib/assets/cache";
-import { buildGame } from "@/lib/engine/build-game";
-import type { GameAssets } from "@/lib/engine/types";
 import type { GameState } from "@/lib/engine";
 import type { ServerMessage } from "@/lib/multiplayer/protocol";
 
 // ============================================================
-// 单人试玩 — 从服务端桌游库拉取资产（get_game），客户端 buildGame（视口居中）
-// ESC 控制面板：重新开始（本地重挂载）/ 返回广场
+// 单人试玩 — 从服务端桌游库拉取资产与无座 initialState（get_game），
+// 直接用（坐标由导入 Lab 摆好）；无座时 GameBoard 自动补虚拟座位
+// ESC 控制面板：重新开始（回 initialState）/ 返回广场
 // ============================================================
 
 export default function GamePlayPage({
@@ -29,7 +28,7 @@ export default function GamePlayPage({
   const [resetKey, setResetKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const assetsRef = useRef<GameAssets>({ sprites: [], prefabs: [] });
+  const initialStateRef = useRef<GameState | null>(null); // 无座存档版（重新开始用）
 
   const fetchGame = useCallback(() => {
     send({ type: "get_game", gameId });
@@ -38,10 +37,10 @@ export default function GamePlayPage({
   useEffect(() => {
     const unsub = onMessage((msg: ServerMessage) => {
       if (msg.type === "game_data" && msg.gameId === gameId) {
-        // 卡牌资产一次性入缓存；初始状态由客户端 buildGame（视口居中）
+        // 资产一次性入缓存；初始状态直接用服务端下发的无座 initialState
         setAssets(msg.assets);
-        assetsRef.current = msg.assets;
-        setGameState(buildGame(msg.assets, { width: window.innerWidth, height: window.innerHeight }));
+        initialStateRef.current = msg.initialState;
+        setGameState(msg.initialState);
         setLoading(false);
       } else if (msg.type === "error") {
         setNotFound(true);
@@ -67,9 +66,10 @@ export default function GamePlayPage({
     return unsub;
   }, [fetchGame, gameId]);
 
-  // ESC 面板：重新开始 = 重新 buildGame（当前视口居中）+ key 重挂载 GameBoard
+  // ESC 面板：重新开始 = 回无座 initialState（坐标原样）+ key 重挂载 GameBoard
   const handleRestart = useCallback(() => {
-    setGameState(buildGame(assetsRef.current, { width: window.innerWidth, height: window.innerHeight }));
+    if (!initialStateRef.current) return;
+    setGameState(initialStateRef.current);
     setResetKey((k) => k + 1);
   }, []);
 

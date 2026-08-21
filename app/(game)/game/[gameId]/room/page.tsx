@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { getStatus, onStatusChange } from "@/lib/multiplayer/connection";
 import { send, onMessage } from "@/lib/multiplayer/transport";
 import { sessionStore } from "@/lib/multiplayer/session";
-import { buildGame } from "@/lib/engine/build-game";
 import type { ServerMessage } from "@/lib/multiplayer/protocol";
 
 export default function RoomCreatePage({
@@ -28,20 +27,16 @@ export default function RoomCreatePage({
 
     const unsubMsg = onMessage((msg: ServerMessage) => {
       if (msg.type === "room_created") {
-        // 创建者客户端初始化游戏状态：buildGame（自己视口居中）→ 存 session → update_game_state
-        const gameState = buildGame(msg.assets, {
-          width: window.innerWidth,
-          height: window.innerHeight,
-        });
+        // 直接用服务端下发的初始状态（补座版 + 无座存档版）
         sessionStore.set({
           code: msg.code,
           playerId: msg.playerId,
           creatorId: msg.creatorId,
           players: msg.players,
-          gameState,
+          gameState: msg.gameState,
+          initialState: msg.initialState,
           assets: msg.assets,
         });
-        send({ type: "update_game_state", state: gameState });
         router.replace(`/room/${msg.code}`);
       } else if (msg.type === "error") {
         setError(msg.message);

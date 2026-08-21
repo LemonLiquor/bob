@@ -67,6 +67,7 @@ export default function RoomPanel() {
             creatorId: msg.creatorId,
             players: msg.players,
             gameState: msg.gameState,
+            initialState: msg.initialState,
             assets: msg.assets,
           });
           break;

@@ -41,14 +41,17 @@ export function handleMessage(
         send(ws, { type: "error", message: "该游戏未上传到桌游库" });
         return;
       }
-      // 只下发资产：初始状态由创建者客户端 buildGame（含视口居中）后 update_game_state 写入
+      const def = gameLibrary.getGame(room.gameId ?? "");
+      // 下发资产 + 无座存档 initialState（重新开始用）+ 补座后的服务端初始状态（显示用）
       send(ws, {
         type: "room_created",
         code: room.code,
         playerId: parsed.playerId,
         creatorId: room.creatorId,
         players: roomManager.getPlayers(room),
-        assets: gameLibrary.getGame(room.gameId ?? "")?.assets ?? { sprites: [], prefabs: [] },
+        assets: def?.assets ?? { sprites: [], prefabs: [] },
+        initialState: def ? structuredClone(def.initialState) : { entities: [], piles: [], seats: [] },
+        gameState: structuredClone(room.gameState),
       });
       break;
     }
@@ -60,7 +63,8 @@ export function handleMessage(
         send(ws, { type: "error", message: roomManager.isRoomFull(parsed.code) ? "房间已满" : "房间不存在" });
         return;
       }
-      // 进房一次性下发卡牌资产（重连场景同样覆盖）
+      // 进房一次性下发卡牌资产 + 初始状态（重连场景同样覆盖）
+      const def = gameLibrary.getGame(room.gameId ?? "");
       send(ws, {
         type: "room_joined",
         code: room.code,
@@ -68,7 +72,8 @@ export function handleMessage(
         creatorId: room.creatorId,
         players: roomManager.getPlayers(room),
         gameState: room.gameState,
-        assets: gameLibrary.getGame(room.gameId ?? "")?.assets ?? { sprites: [], prefabs: [] },
+        assets: def?.assets ?? { sprites: [], prefabs: [] },
+        initialState: def ? structuredClone(def.initialState) : { entities: [], piles: [], seats: [] },
       });
       if (!isReconnect) {
         broadcast(room, {
@@ -176,11 +181,12 @@ export function handleMessage(
         send(ws, { type: "error", message: "该游戏不存在于桌游库" });
         return;
       }
-      // 只发资产：初始状态由客户端 buildGame（含视口居中）
+      // 下发资产 + 无座 initialState：客户端直接用（Lab 已摆好坐标）
       send(ws, {
         type: "game_data",
         gameId: saved.meta.id,
         assets: saved.assets,
+        initialState: structuredClone(saved.initialState),
       });
       break;
     }

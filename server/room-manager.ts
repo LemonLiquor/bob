@@ -35,8 +35,9 @@ export class RoomManager {
   }
 
   /** 创建房间。房主不自动入座（须手动 occupy_seat）。
-   *  初始状态由创建者客户端 buildGame 后 update_game_state 写入，
-   *  此处用空占位（加入者若在初始化前进入，客户端本地 build 兜底显示） */
+   *  初始状态直接取桌游存档的无座 initialState（坐标由导入页 Lab 自定义），
+   *  并补 1 个默认空座（复用 createSeat），创建者可立即落座；
+   *  深拷贝防多房间共享引用。 */
   createRoom(ws: WebSocket, playerId: string, playerName: string, gameId: string): Room | null {
     const def = this.gameLibrary.getGame(gameId);
     if (!def) return null;
@@ -47,7 +48,7 @@ export class RoomManager {
     const room: Room = {
       code,
       players: new Map([[ws, player]]),
-      gameState: { entities: [], piles: [], seats: [] },
+      gameState: { ...structuredClone(def.initialState), seats: [createSeat()] },
       creatorId: playerId,
       gameId: def.meta.id,
       gameName: def.meta.name,

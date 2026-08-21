@@ -5,18 +5,18 @@ import { useRouter } from "next/navigation";
 import { send, onMessage } from "@/lib/multiplayer/transport";
 import { sessionStore } from "@/lib/multiplayer/session";
 import { setAssets } from "@/lib/assets/cache";
-import { buildGame } from "@/lib/engine/build-game";
 import type { GameAction, ServerMessage } from "@/lib/multiplayer/protocol";
-import type { GameAssets, GameState } from "@/lib/engine";
+import type { GameState } from "@/lib/engine";
 import GameBoard from "@/components/game/GameBoard";
 import GameControlPanel from "@/components/game/GameControlPanel";
 import RoomPanel from "@/components/room/RoomPanel";
 
 // ============================================================
 // 多人游戏房间 — 服务端 GameState 受控模式
-// 资产随 room_created / room_joined 一次性下发（进房加载一次），
-// 之后的 state_sync 只带轻量状态（imageId 引用），不重复传图
-// 初始状态由创建者客户端 buildGame（视口居中）后 update_game_state 写入
+// 资产 + 初始状态随 room_created / room_joined 一次性下发（进房加载一次），
+// 初始状态 = 桌游存档的无座 initialState（坐标由导入 Lab 摆好，
+// 服务端 createRoom 时补 1 个默认空座），客户端直接用，不再 buildGame。
+// 之后的 state_sync 只带轻量状态，不重复传图。
 // ============================================================
 
 export default function RoomPage() {
@@ -24,7 +24,7 @@ export default function RoomPage() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [roomCode, setRoomCode] = useState("");
   const [isCreator, setIsCreator] = useState(false);
-  const assetsRef = useRef<{ assets: GameAssets; creatorId: string; playerId: string } | null>(null);
+  const initialStateRef = useRef<GameState | null>(null); // 无座存档版（重新开始用）
 
   // 挂载时从 sessionStore 取初始状态（含资产），并监听 state_sync
   useEffect(() => {
@@ -34,30 +34,21 @@ export default function RoomPage() {
       return;
     }
 
-    // 卡牌资产一次性入缓存 → 直接渲染
+    // 资产一次性入缓存 → 直接渲染服务端初始状态（无座 + 默认空座）
     setAssets(session.assets);
     setGameState(session.gameState);
     setRoomCode(session.code);
     setIsCreator(session.creatorId === session.playerId);
-    assetsRef.current = {
-      assets: session.assets,
-      creatorId: session.creatorId,
-      playerId: session.playerId,
-    };
+    initialStateRef.current = session.initialState;
 
     const unsub = onMessage((msg: ServerMessage) => {
       if (msg.type === "state_sync") {
         setGameState(msg.state);
       } else if (msg.type === "room_joined") {
-        // 断线重连：资产重新填充 + 状态更新
+        // 断线重连：资产重新填充 + 状态更新 + 存档版 initialState 刷新
         setAssets(msg.assets);
-        // 竞态兜底：创建者尚未 update_game_state 时服务端是空占位 state，
-        // 本地 buildGame 兜底显示（不发送，等创建者广播修正）
-        const isEmpty =
-          msg.gameState.entities.length === 0 &&
-          msg.gameState.piles.length === 0 &&
-          msg.gameState.seats.length === 0;
-        setGameState(isEmpty ? buildGame(msg.assets, { width: window.innerWidth, height: window.innerHeight }) : msg.gameState);
+        setGameState(msg.gameState);
+        initialStateRef.current = msg.initialState;
       }
     });
     return unsub;
@@ -68,16 +59,17 @@ export default function RoomPage() {
     send({ type: "game_action", action });
   }, []);
 
-  // ESC 面板：重新开始（仅房主）→ 重新 buildGame（当前视口居中）→ 广播
+  // ESC 面板：重新开始（仅房主）→ 回无座 initialState（坐标原样），
+  // 座位保留实例与归属、仅清空手牌（玩家无需重新占座）→ 广播
   const handleRestart = useCallback(() => {
-    const ref = assetsRef.current;
-    if (!ref) return;
-    const state = buildGame(ref.assets, {
-      width: window.innerWidth,
-      height: window.innerHeight,
-    });
+    const init = initialStateRef.current;
+    if (!init) return;
+    const state: GameState = {
+      ...init,
+      seats: (gameState?.seats ?? []).map((s) => ({ ...s, handZone: { entityIds: [] } })),
+    };
     send({ type: "update_game_state", state });
-  }, []);
+  }, [gameState]);
 
   // ESC 面板：退出房间
   const handleExit = useCallback(() => {

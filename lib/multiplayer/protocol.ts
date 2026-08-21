@@ -45,10 +45,10 @@ export type ServerMessage =
   | { type: "room_list"; rooms: RoomInfo[] }
   | { type: "game_uploaded"; gameId: string }
   | { type: "game_list"; games: GameInfo[] }
-  // 客户端负责 buildGame（含居中），room_created 不再携带 initialState
-  | { type: "game_data"; gameId: string; assets: GameAssets }
-  | { type: "room_created"; code: string; playerId: string; creatorId: string; players: PlayerInfo[]; assets: GameAssets }
-  | { type: "room_joined"; code: string; playerId: string; creatorId: string; players: PlayerInfo[]; gameState: GameState; assets: GameAssets }
+  // 客户端直接用服务端下发的初始状态（含 Lab 自定义坐标），不再 buildGame
+  | { type: "game_data"; gameId: string; assets: GameAssets; initialState: GameState }
+  | { type: "room_created"; code: string; playerId: string; creatorId: string; players: PlayerInfo[]; assets: GameAssets; initialState: GameState; gameState: GameState }
+  | { type: "room_joined"; code: string; playerId: string; creatorId: string; players: PlayerInfo[]; gameState: GameState; assets: GameAssets; initialState: GameState }
   | { type: "player_joined"; player: PlayerInfo; seats: Seat[] }
   | { type: "player_left"; playerId: string; players: PlayerInfo[]; seats: Seat[] }
   | { type: "state_sync"; state: GameState }
