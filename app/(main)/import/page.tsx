@@ -4,24 +4,19 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { getPageCount, renderPageToCanvas } from "@/lib/pnp/pdf";
 import { cropGrid, buildGameFromDecks, DEFAULT_CROP, type CropConfig, type Deck } from "@/lib/pnp/crop";
-import type { GameAssets, GameState, Sprite } from "@/lib/engine/types";
-import type { UploadGameMeta } from "@/lib/multiplayer/protocol";
-import CropInput from "@/components/import/CropInput";
-import GridPreview, { type PreviewData } from "@/components/import/GridPreview";
-import CardBack from "@/components/game/CardBack";
-
-// 卡组类型见 lib/pnp/crop.ts（页面内临时结构，S4a 摊平为 prefabs + piles）
-
-/** 图片选择模式：新建卡组选背面 / 替换单卡正背面 */
-type Picker =
-  | { type: "back"; deckIdx: number }
-  | { type: "replace"; deckIdx: number; cardIdx: number; face: "front" | "back" }
-  | null;
+import type { Sprite } from "@/lib/engine/types";
+import PagePicker from "@/components/import/PagePicker";
+import CropParams from "@/components/import/CropParams";
+import PagePreviews from "@/components/import/PagePreviews";
+import SpritePool from "@/components/import/SpritePool";
+import DeckBuilder, { type Picker } from "@/components/import/DeckBuilder";
+import GeneratePanel, { type PendingUpload } from "@/components/import/GeneratePanel";
+import type { PreviewData } from "@/components/import/GridPreview";
 
 // ============================================================
-// PnP PDF 导入页（S1：切图 → 图片资源池）
-// 选 PDF → 全局切割参数 → 切割全部页 → 图片池（Sprite[]，id sprite-{n} 连续）
-// 后续步骤：S2 页面多选 / S3 卡组组装 / S4 上传
+// PnP PDF 导入页 — 状态与逻辑中枢，UI 拆分至 components/import/
+// 流程：选 PDF → 页面多选 → 切割参数 → 预览 → 图片池 → 卡组组装
+//       → 生成桌游数据 json（S4a）→ Lab 调整（S4b）→ 上传（S4c）
 // ============================================================
 
 /** 验收打印：url 截断摘要，避免 dataURL 刷屏 */
@@ -52,11 +47,7 @@ export default function ImportPage() {
   const [cols, setCols] = useState(4);
   const [crop, setCrop] = useState<CropConfig>(DEFAULT_CROP);
   const [name, setName] = useState("");
-  const [pendingUpload, setPendingUpload] = useState<{
-    meta: UploadGameMeta;
-    assets: GameAssets;
-    initialState: GameState;
-  } | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
   const [sprites, setSprites] = useState<Sprite[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
@@ -160,29 +151,24 @@ export default function ImportPage() {
     }
   }
 
-  /** 验收打印/页面展示：url 截断摘要，避免 dataURL 刷屏 */
-  function jsonPreview(payload: { meta: UploadGameMeta; assets: GameAssets; initialState: GameState }) {
-    return {
+  /** 生成桌游数据 json（上传前预览；S4b Lab 调整坐标后更新 initialState） */
+  function handleGenerate() {
+    if (!file || sprites.length === 0 || !name.trim()) return;
+    const { prefabs, entities, piles } = buildGameFromDecks(decks);
+    const payload: PendingUpload = {
+      meta: { id: `pnp-${Date.now()}`, name: name.trim(), icon: "🖼️" },
+      assets: { sprites, prefabs },
+      initialState: { entities, piles, seats: [] },
+    };
+    setPendingUpload(payload);
+    console.log("generated:", {
       meta: payload.meta,
       assets: {
         sprites: payload.assets.sprites.map((s) => ({ id: s.id, url: s.url.slice(0, 60) + `…(${s.url.length})` })),
         prefabs: payload.assets.prefabs,
       },
       initialState: payload.initialState,
-    };
-  }
-
-  /** 生成桌游数据 json（上传前预览；S4b Lab 调整坐标后更新 initialState） */
-  function handleGenerate() {
-    if (!file || sprites.length === 0 || !name.trim()) return;
-    const { prefabs, entities, piles } = buildGameFromDecks(decks);
-    const payload = {
-      meta: { id: `pnp-${Date.now()}`, name: name.trim(), icon: "🖼️" },
-      assets: { sprites, prefabs },
-      initialState: { entities, piles, seats: [] },
-    };
-    setPendingUpload(payload);
-    console.log("generated:", jsonPreview(payload));
+    });
   }
 
   /** 点击切换图片选中态 */
@@ -254,15 +240,6 @@ export default function ImportPage() {
     });
   }
 
-  function spriteUrl(id: string): string {
-    return sprites.find((s) => s.id === id)?.url ?? "";
-  }
-
-  /** 当前格是否处于替换目标（闪烁提示） */
-  function isPicking(di: number, ci: number, face: "front" | "back"): boolean {
-    return picker?.type === "replace" && picker.deckIdx === di && picker.cardIdx === ci && picker.face === face;
-  }
-
   function togglePage(page: number) {
     setSelectedPages((prev) => {
       const next = new Set(prev);
@@ -293,232 +270,60 @@ export default function ImportPage() {
 
       {file && (
         <>
-          {/* 页面选择（勾选参与切割的页） */}
-          <div className="mb-3 p-3 border-2 border-ink">
-            <div className="flex items-center gap-3 mb-2">
-              <p className="text-sm font-medium">页面选择</p>
-              <button className="link-pop text-[11px]" onClick={() => setSelectedPages(new Set(Array.from({ length: pageCount }, (_, i) => i + 1)))}>
-                全选
-              </button>
-              <button className="link-pop text-[11px]" onClick={() => setSelectedPages(new Set())}>
-                全不选
-              </button>
-              <span className="text-[11px] text-muted">已选 {selectedPages.size}/{pageCount} 页，仅勾选页参与切割</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {Array.from({ length: pageCount }).map((_, i) => {
-                const page = i + 1;
-                const checked = selectedPages.has(page);
-                return (
-                  <label
-                    key={page}
-                    className={`flex items-center gap-1 text-xs cursor-pointer border-2 px-2 py-1 select-none transition-colors ${checked ? "border-red-500 bg-card" : "border-ink opacity-60 hover:opacity-100"}`}
-                  >
-                    <input type="checkbox" checked={checked} onChange={() => togglePage(page)} className="accent-red-500" />
-                    第 {page} 页
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 全局切割参数 */}
-          <div className="flex flex-wrap items-end gap-3 mb-3 p-3 border-2 border-ink">
-            <label className="text-xs text-secondary flex flex-col gap-1">
-              行数
-              <input
-                type="number" min={1} max={12}
-                className="input-pop w-16"
-                value={rows}
-                onChange={(e) => handleGridChange("rows", e.target.value)}
-              />
-            </label>
-            <label className="text-xs text-secondary flex flex-col gap-1">
-              列数
-              <input
-                type="number" min={1} max={12}
-                className="input-pop w-16"
-                value={cols}
-                onChange={(e) => handleGridChange("cols", e.target.value)}
-              />
-            </label>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="text-[11px] text-muted">页边距</span>
-              <CropInput label="上" value={crop.marginTop} onChange={(v) => handleCropChange("marginTop", v)} />
-              <CropInput label="下" value={crop.marginBottom} onChange={(v) => handleCropChange("marginBottom", v)} />
-              <CropInput label="左" value={crop.marginLeft} onChange={(v) => handleCropChange("marginLeft", v)} />
-              <CropInput label="右" value={crop.marginRight} onChange={(v) => handleCropChange("marginRight", v)} />
-              <span className="text-[11px] text-muted ml-2">牌间隔</span>
-              <CropInput label="横" value={crop.gapX} onChange={(v) => handleCropChange("gapX", v)} />
-              <CropInput label="纵" value={crop.gapY} onChange={(v) => handleCropChange("gapY", v)} />
-            </div>
-            <button
-              className="btn-pop text-sm"
-              onClick={handleCrop}
-              disabled={busy || !file || selectedPages.size === 0}
-            >
-              {busy ? "切割中..." : `切割勾选页（${selectedPages.size} 页）`}
-            </button>
-          </div>
-
-          {/* 页面预览（只显示勾选页，格子线按当前参数实时计算） */}
-          <div className="mb-3 p-3 border-2 border-ink">
-            <p className="text-sm font-medium mb-2">页面预览（{selectedPages.size}/{pageCount} 页，调参实时对齐格子线）</p>
-            <div className="flex flex-wrap gap-4">
-              {previews.map((p, i) => {
-                const page = i + 1;
-                if (!selectedPages.has(page)) return null;
-                return (
-                  <div key={i} className="w-[240px]">
-                    <GridPreview prev={p} label={`第 ${page} 页`} rows={rows} cols={cols} crop={crop} />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 图片池 */}
+          <PagePicker
+            pageCount={pageCount}
+            selectedPages={selectedPages}
+            onTogglePage={togglePage}
+            onSelectAll={() => setSelectedPages(new Set(Array.from({ length: pageCount }, (_, i) => i + 1)))}
+            onSelectNone={() => setSelectedPages(new Set())}
+          />
+          <CropParams
+            rows={rows}
+            cols={cols}
+            crop={crop}
+            busy={busy}
+            selectedPagesCount={selectedPages.size}
+            onGridChange={handleGridChange}
+            onCropChange={handleCropChange}
+            onCrop={handleCrop}
+          />
+          <PagePreviews
+            previews={previews}
+            selectedPages={selectedPages}
+            pageCount={pageCount}
+            rows={rows}
+            cols={cols}
+            crop={crop}
+          />
           {sprites.length > 0 && (
-            <div className="border-2 border-ink p-3">
-              <p className="text-sm font-medium mb-2">
-                图片池（{sprites.length} 张，选中 {selected.size} 张）
-              </p>
-              <div className="flex items-center gap-3 mb-2">
-                <button className="link-pop text-[11px]" onClick={() => setSelected(new Set(sprites.map((s) => s.id)))}>
-                  全选
-                </button>
-                <button className="link-pop text-[11px]" onClick={() => setSelected(new Set())}>
-                  全不选
-                </button>
-              </div>
-              <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))" }}>
-                {sprites.map((s, i) => {
-                  const isSel = selected.has(s.id);
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => handleSpriteClick(s.id)}
-                      className={`relative flex flex-col items-center gap-1 p-1 border-2 bg-card transition-colors ${isSel ? "border-red-500 ring-2 ring-red-500/30" : "border-ink hover:border-secondary"}`}
-                    >
-                      <img src={s.url} alt={s.id} className="w-full h-[112px] object-cover" />
-                      <span className="text-[10px] font-mono text-secondary">{s.id}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <SpritePool
+              sprites={sprites}
+              selected={selected}
+              onToggle={handleSpriteClick}
+              onSelectAll={() => setSelected(new Set(sprites.map((s) => s.id)))}
+              onSelectNone={() => setSelected(new Set())}
+            />
           )}
-
-          {/* 卡组区 */}
-          <div className="border-2 border-ink p-3 mt-3">
-            <div className="flex items-center gap-3 mb-2">
-              <p className="text-sm font-medium">
-                卡组（{decks.length} 个，共 {decks.reduce((n, d) => n + d.cards.length, 0)} 张卡）
-              </p>
-              <button className="btn-pop text-sm" onClick={handleAddDeck} disabled={selected.size === 0}>
-                + 新建卡组（{selected.size} 张）
-              </button>
-            </div>
-
-            {picker && (
-              <div className="flex items-center gap-2 mb-2 px-2 py-1 bg-yellow-200/70 border-2 border-ink text-xs">
-                <span>
-                  {picker.type === "back"
-                    ? `为「卡组 ${picker.deckIdx + 1}」选择共用背面：点击图片池图片，或跳过用默认卡背`
-                    : `替换「卡组 ${picker.deckIdx + 1}」第 ${picker.cardIdx + 1} 张卡的${picker.face === "front" ? "正面" : "背面"}：点击图片池图片`}
-                </span>
-                {picker.type === "back" && (
-                  <button className="link-pop text-[11px]" onClick={() => setPicker(null)}>
-                    跳过（默认卡背）
-                  </button>
-                )}
-                <button className="link-pop text-[11px]" onClick={() => setPicker(null)}>
-                  取消
-                </button>
-              </div>
-            )}
-
-            {decks.length === 0 ? (
-              <p className="text-[11px] text-muted">先在图片池选中图片，再点「新建卡组」</p>
-            ) : (
-              decks.map((deck, di) => (
-                <div key={di} className="border-2 border-ink p-2 mb-2 bg-card">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium">卡组 {di + 1}（{deck.cards.length} 张卡）</span>
-                    <button className="link-pop text-[11px] text-red-500" onClick={() => handleRemoveDeck(di)}>
-                      删除卡组
-                    </button>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    {deck.cards.map((card, ci) => (
-                      <div key={ci} className="flex items-center gap-2 border border-ink/40 p-1">
-                        <button
-                          className={`relative w-10 h-14 border-2 overflow-hidden bg-[#1e3a5f] ${isPicking(di, ci, "front") ? "animate-pulse border-red-500" : "border-transparent hover:border-secondary"}`}
-                          onClick={() => setPicker({ type: "replace", deckIdx: di, cardIdx: ci, face: "front" })}
-                          title="点击替换正面"
-                        >
-                          <img src={spriteUrl(card.frontSpriteId)} alt="正面" className="w-full h-full object-cover" />
-                        </button>
-                        <button
-                          className={`relative w-10 h-14 border-2 overflow-hidden bg-[#1e3a5f] ${isPicking(di, ci, "back") ? "animate-pulse border-red-500" : "border-transparent hover:border-secondary"}`}
-                          onClick={() => setPicker({ type: "replace", deckIdx: di, cardIdx: ci, face: "back" })}
-                          title="点击替换背面"
-                        >
-                          {card.backSpriteId ? (
-                            <img src={spriteUrl(card.backSpriteId)} alt="背面" className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <CardBack />
-                            </div>
-                          )}
-                        </button>
-                        <span className="text-[10px] font-mono text-secondary flex-1">
-                          {card.frontSpriteId} / {card.backSpriteId || "默认卡背"}
-                        </span>
-                        <button className="link-pop text-[11px] text-red-500" onClick={() => handleRemoveCard(di, ci)}>
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+          <DeckBuilder
+            decks={decks}
+            sprites={sprites}
+            picker={picker}
+            selectedCount={selected.size}
+            onAddDeck={handleAddDeck}
+            onRemoveCard={handleRemoveCard}
+            onRemoveDeck={handleRemoveDeck}
+            onSetPicker={setPicker}
+          />
         </>
       )}
 
-      {/* 生成桌游数据（上传前预览） */}
-      <div className="flex items-end justify-end gap-2 mt-4">
-        <Link href="/games" className="btn-ghost text-sm">
-          取消
-        </Link>
-        <label className="text-xs text-secondary flex flex-col gap-1">
-          桌游名
-          <input
-            className="input-pop w-48"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="我的桌游"
-          />
-        </label>
-        <button
-          className="btn-pop text-sm"
-          onClick={handleGenerate}
-          disabled={!file || sprites.length === 0 || !name.trim()}
-        >
-          生成桌游数据
-        </button>
-      </div>
-
-      {pendingUpload && (
-        <div className="mt-4 border-2 border-ink p-3 bg-card">
-          <p className="text-sm font-medium mb-2">桌游数据（上传前检查；坐标可在 Lab 中调整）</p>
-          <pre className="text-[11px] font-mono text-secondary max-h-64 overflow-auto whitespace-pre-wrap break-all">
-            {JSON.stringify(jsonPreview(pendingUpload), null, 2)}
-          </pre>
-        </div>
-      )}
+      <GeneratePanel
+        name={name}
+        onNameChange={setName}
+        canGenerate={!!file && sprites.length > 0 && !!name.trim()}
+        onGenerate={handleGenerate}
+        pendingUpload={pendingUpload}
+      />
 
       {error && <p className="mt-2 text-red-500 text-sm">{error}</p>}
       {progress && <p className="mt-2 text-secondary text-sm">{progress}</p>}
