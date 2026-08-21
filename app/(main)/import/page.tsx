@@ -26,12 +26,61 @@ import type { PreviewData } from "@/components/import/GridPreview";
 //       → 生成桌游 → Lab 沙盒摆布局 → 保存并上传（meta+assets+无座 initialState）
 // ============================================================
 
+const CROP_STORAGE_KEY = "import_crop_params";
+
+interface StoredCropParams {
+  rows: number;
+  cols: number;
+  crop: CropConfig;
+}
+
+/** 读取上次切割参数（localStorage，损坏/缺失回退默认） */
+function loadCropParams(): StoredCropParams {
+  if (typeof window === "undefined") return { rows: 4, cols: 4, crop: DEFAULT_CROP };
+  try {
+    const raw = localStorage.getItem(CROP_STORAGE_KEY);
+    if (raw) {
+      const p = JSON.parse(raw) as Partial<StoredCropParams>;
+      const num = (v: unknown, d: number) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : d;
+      };
+      const c = (p.crop ?? {}) as Partial<CropConfig>;
+      return {
+        rows: Math.max(1, Math.min(12, num(p.rows, 4))),
+        cols: Math.max(1, Math.min(12, num(p.cols, 4))),
+        crop: {
+          marginTop: Math.max(0, num(c.marginTop, 0)),
+          marginBottom: Math.max(0, num(c.marginBottom, 0)),
+          marginLeft: Math.max(0, num(c.marginLeft, 0)),
+          marginRight: Math.max(0, num(c.marginRight, 0)),
+          gapX: Math.max(0, num(c.gapX, 0)),
+          gapY: Math.max(0, num(c.gapY, 0)),
+        },
+      };
+    }
+  } catch {
+    /* 解析失败用默认 */
+  }
+  return { rows: 4, cols: 4, crop: DEFAULT_CROP };
+}
+
+/** 切割成功时保存参数 */
+function saveCropParams(rows: number, cols: number, crop: CropConfig): void {
+  try {
+    localStorage.setItem(CROP_STORAGE_KEY, JSON.stringify({ rows, cols, crop }));
+  } catch {
+    /* 忽略 */
+  }
+}
+
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [pageCount, setPageCount] = useState(0);
-  const [rows, setRows] = useState(4);
-  const [cols, setCols] = useState(4);
-  const [crop, setCrop] = useState<CropConfig>(DEFAULT_CROP);
+  const [initCrop] = useState(loadCropParams); // 进入页面恢复上次切割参数
+  const [rows, setRows] = useState(initCrop.rows);
+  const [cols, setCols] = useState(initCrop.cols);
+  const [crop, setCrop] = useState<CropConfig>(initCrop.crop);
   const [name, setName] = useState("");
   const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
   const [sprites, setSprites] = useState<Sprite[]>([]); // 全量累积（实体组引用的旧批次保留，生成全量上传）
@@ -177,6 +226,7 @@ export default function ImportPage() {
       setLastBatch(allBatch);
       setPoolFilter(new Set(allBatch.map((s) => s.id))); // 自动全选最新批次（分批处理）
       setSelected(new Set());
+      saveCropParams(rows, cols, crop); // 切割成功 → 记住本次参数
       // 保留 groups / shapes / sizes（分批追加）
     } catch (err) {
       setError(`切割失败: ${(err as Error).message}`);
