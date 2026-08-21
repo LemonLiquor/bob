@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getPageCount, renderPageToCanvas } from "@/lib/pnp/pdf";
-import { cropGrid, buildGameFromDecks, DEFAULT_CROP, type CropConfig, type Deck } from "@/lib/pnp/crop";
+import { cropGrid, buildGameFromDecks, mirrorBackIndex, DEFAULT_CROP, type CropConfig, type Deck } from "@/lib/pnp/crop";
 import type { GameAction, GameState, Sprite } from "@/lib/engine/types";
 import { applyAction } from "@/lib/engine";
 import { setAssets } from "@/lib/assets/cache";
@@ -293,6 +293,29 @@ export default function ImportPage() {
     });
   }
 
+  /** S5 页对预设：勾选页按顺序两两配对，每对生成一个卡组（正面 = 前页切图，背面 = 后页镜像图）
+   *  前提：图片池为当前勾选页按序切割的结果（第 i 个勾选页的图在 [i*n, (i+1)*n)，n = 行×列） */
+  function handleAutoPairDecks() {
+    if (sprites.length === 0) return;
+    const n = rows * cols;
+    const sorted = Array.from(selectedPages).sort((a, b) => a - b);
+    const newDecks: Deck[] = [];
+    for (let i = 0; i < sorted.length; i += 2) {
+      const frontBase = i * n;
+      const cards = Array.from({ length: n }, (_, k) => ({
+        frontSpriteId: `sprite-${frontBase + k}`,
+        // 奇数页最后一组无背面（默认卡背）
+        backSpriteId: i + 1 < sorted.length ? `sprite-${frontBase + n + mirrorBackIndex(k, cols)}` : "",
+      }));
+      newDecks.push({ cards });
+    }
+    setDecks((prev) => {
+      const next = [...prev, ...newDecks];
+      logDecks(next);
+      return next;
+    });
+  }
+
   function togglePage(page: number) {
     setSelectedPages((prev) => {
       const next = new Set(prev);
@@ -392,6 +415,7 @@ export default function ImportPage() {
             picker={picker}
             selectedCount={selected.size}
             onAddDeck={handleAddDeck}
+            onAutoPair={handleAutoPairDecks}
             onRemoveCard={handleRemoveCard}
             onRemoveDeck={handleRemoveDeck}
             onSetPicker={setPicker}

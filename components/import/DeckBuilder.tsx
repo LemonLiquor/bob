@@ -20,6 +20,7 @@ interface DeckBuilderProps {
   picker: Picker;
   selectedCount: number;
   onAddDeck: () => void;
+  onAutoPair: () => void;
   onRemoveCard: (deckIdx: number, cardIdx: number) => void;
   onRemoveDeck: (deckIdx: number) => void;
   onSetPicker: (picker: Picker) => void;
@@ -27,7 +28,7 @@ interface DeckBuilderProps {
 
 export default function DeckBuilder({
   decks, sprites, picker, selectedCount,
-  onAddDeck, onRemoveCard, onRemoveDeck, onSetPicker,
+  onAddDeck, onAutoPair, onRemoveCard, onRemoveDeck, onSetPicker,
 }: DeckBuilderProps) {
   const spriteUrl = (id: string): string => sprites.find((s) => s.id === id)?.url ?? "";
 
@@ -40,6 +41,14 @@ export default function DeckBuilder({
         <p className="text-sm font-medium">
           卡组（{decks.length} 个，共 {decks.reduce((n, d) => n + d.cards.length, 0)} 张卡）
         </p>
+        <button
+          className="btn-ghost text-xs"
+          onClick={onAutoPair}
+          disabled={sprites.length === 0}
+          title="勾选页按顺序两两配对：正面=前页切图，背面=后页镜像图"
+        >
+          自动正反交替组卡
+        </button>
         <button className="btn-pop text-sm" onClick={onAddDeck} disabled={selectedCount === 0}>
           + 新建卡组（{selectedCount} 张）
         </button>
