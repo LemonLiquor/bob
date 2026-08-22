@@ -57,6 +57,7 @@ export default function LabPage() {
   const gameIdRef = useRef<string | null>(null); // 桌游 id：首次导入时固定（保存/上传复用）
   const [restored, setRestored] = useState(false); // 已恢复草稿（显示「丢弃」chip）
   const [uploading, setUploading] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false); // 上传确认弹窗
   const [error, setError] = useState<string | null>(null);
   const pendingGameIdRef = useRef<string | null>(null); // 上传中的 gameId（匹配 game_uploaded）
   const router = useRouter();
@@ -109,7 +110,7 @@ export default function LabPage() {
 
   /** 导入提交：摊平（id 从全局计数器续）→ 网格摆位 → 合并工作区 */
   function handleCommit({ sprites: batchSprites, groups, sizes, fileName, name: batchName }: CommitPayload) {
-    // 桌游名默认取第一个 PDF 名（弹窗内已改名则优先弹窗名）；桌游 id 首次导入时固定
+    // 桌游名默认取第一个 PDF 文件名（lab 上传弹窗可改）；桌游 id 首次导入时固定
     if (!name.trim()) setName(batchName.trim() || fileName.replace(/\.pdf$/i, ""));
     if (!gameIdRef.current) gameIdRef.current = `pnp-${Date.now()}`;
     const { prefabs: newPrefabs, entities, piles } = buildGameFromGroups(
@@ -156,8 +157,14 @@ export default function LabPage() {
     saveDraft(payload).catch((e) => console.error("草稿保存失败", e));
   }
 
-  /** 切片 6：上传（meta + assets + 无座 initialState → 原上传链路；成功后清草稿跳广场） */
+  /** 上传：先弹确认窗检查上传信息（桌游名可编辑 + 实体统计），确认后发送 */
   function handleUpload() {
+    if (empty || uploading) return;
+    setUploadOpen(true);
+  }
+
+  /** 确认上传：组装 meta + assets + 无座 initialState → 原上传链路；成功后清草稿跳广场 */
+  function doUpload() {
     if (empty || uploading) return;
     const payload = {
       meta: {
@@ -169,6 +176,7 @@ export default function LabPage() {
       initialState: { ...labState, seats: [] }, // 强制无座
     };
     if (!gameIdRef.current) gameIdRef.current = payload.meta.id;
+    setUploadOpen(false);
     setUploading(true);
     setError(null);
     pendingGameIdRef.current = payload.meta.id;
@@ -221,6 +229,10 @@ export default function LabPage() {
 
   const empty = labState.entities.length === 0 && labState.piles.length === 0;
 
+  // 实体统计（上传确认窗展示，按 kind 分组）
+  const kindCounts = { card: 0, token: 0, board: 0 };
+  for (const e of labState.entities) kindCounts[e.kind]++;
+
   return (
     // (game) 布局已提供 h-screen 高度，GameBoard 的 h-full 直接填满（无 nav，视口坐标 = 桌面坐标）
     <>
@@ -265,6 +277,38 @@ export default function LabPage() {
           导入 PDF
         </button>
       </div>
+      {/* 上传确认弹窗：检查上传信息（桌游名可编辑 + 统计） */}
+      {uploadOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
+          <div className="bg-card border-2 border-ink p-6 w-full max-w-sm">
+            <h3 className="text-lg font-bold mb-4">上传桌游</h3>
+            <label className="text-xs text-secondary flex flex-col gap-1 mb-4">
+              桌游名称
+              <input
+                className="input-pop w-full"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="我的桌游"
+                autoFocus
+              />
+            </label>
+            <div className="text-xs text-secondary flex flex-col gap-1 mb-5">
+              <span>
+                卡牌 {kindCounts.card} 张 / Token {kindCounts.token} 个 / 版图 {kindCounts.board} 块
+              </span>
+              <span>图片 {sprites.length} 张</span>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button className="btn-ghost text-sm" onClick={() => setUploadOpen(false)}>
+                取消
+              </button>
+              <button className="btn-pop text-sm" onClick={doUpload}>
+                确认上传
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* 导入弹窗：遮罩 + 居中卡片（滚动），四周露出 lab 桌面 */}
       {importOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 overflow-y-auto">

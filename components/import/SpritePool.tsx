@@ -35,7 +35,7 @@ export default function SpritePool({ sprites, selected, onToggle, onSelectAll, o
             <button
               key={s.id}
               onClick={() => onToggle(s.id)}
-              className={`relative flex flex-col items-center gap-1 p-1 border-2 bg-card transition-colors ${isSel ? "border-red-500 ring-2 ring-red-500/30" : "border-ink hover:border-secondary"}`}
+              className={`relative flex flex-col items-center gap-1 p-1 border-2 bg-card transition-colors ${isSel ? "border-red-500 ring-2 ring-red-500/30" : "border-transparent hover:border-secondary"}`}
             >
               <img src={s.url} alt={s.id} className="w-full h-[112px] object-cover" />
               <span className="text-[10px] font-mono text-secondary">{s.id}</span>

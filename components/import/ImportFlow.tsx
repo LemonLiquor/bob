@@ -77,7 +77,7 @@ interface ImportFlowProps {
     sizes: Map<string, { width: number; height: number }>;
     fileName: string;
     name: string;
-  }) => void; // 提交本批次（页面负责摊平/摆位/合并工作区）
+  }) => void; // 提交本批次（页面负责摊平/摆位/合并工作区）；name = PDF 文件名（桌游名在 lab 上传弹窗设置）
 }
 
 export default function ImportFlow({ onClose, allocSpriteId, onCommit }: ImportFlowProps) {
@@ -87,7 +87,6 @@ export default function ImportFlow({ onClose, allocSpriteId, onCommit }: ImportF
   const [rows, setRows] = useState(initCrop.rows);
   const [cols, setCols] = useState(initCrop.cols);
   const [crop, setCrop] = useState<CropConfig>(initCrop.crop);
-  const [name, setName] = useState("");
   const [sprites, setSprites] = useState<Sprite[]>([]); // 全量累积（实体组引用的旧批次保留，生成全量上传）
   const [lastBatch, setLastBatch] = useState<Sprite[]>([]); // 最近一次切割结果（实体定义面板/图片池显示）
   const [pageSprites, setPageSprites] = useState<Map<number, Sprite[]>>(new Map()); // 页号 → 该页最新批次（自动组卡用）
@@ -127,7 +126,6 @@ export default function ImportFlow({ onClose, allocSpriteId, onCommit }: ImportF
     }
 
     setFile(f);
-    setName(f.name.replace(/\.pdf$/i, ""));
     setError(null);
     setBusy(true);
     try {
@@ -218,10 +216,10 @@ export default function ImportFlow({ onClose, allocSpriteId, onCommit }: ImportF
     }
   }
 
-  /** 导入：提交本批次到工作区（页面摊平/摆位/合并） + 关弹窗 */
+  /** 导入：提交本批次到工作区（页面摊平/摆位/合并） + 关弹窗。桌游名 = PDF 文件名（lab 上传弹窗可改） */
   function handleImport() {
-    if (!file || sprites.length === 0 || !name.trim()) return;
-    onCommit({ sprites, groups, sizes, fileName: file.name, name: name.trim() });
+    if (!file || sprites.length === 0) return;
+    onCommit({ sprites, groups, sizes, fileName: file.name, name: file.name.replace(/\.pdf$/i, "") });
     onClose();
   }
 
@@ -483,9 +481,7 @@ export default function ImportFlow({ onClose, allocSpriteId, onCommit }: ImportF
       )}
 
       <GeneratePanel
-        name={name}
-        onNameChange={setName}
-        canImport={!!file && sprites.length > 0 && !!name.trim()}
+        canImport={!!file && sprites.length > 0}
         onImport={handleImport}
         onCancel={onClose}
       />

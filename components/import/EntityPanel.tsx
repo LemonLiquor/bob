@@ -76,7 +76,7 @@ export default function EntityPanel({
             <div
               key={s.id}
               onClick={() => (pickerActive ? onSpriteClick(s.id) : toggle(s.id))}
-              className={`relative flex flex-col items-center gap-1 p-1 border-2 bg-card transition-colors cursor-pointer ${isSel ? "border-red-500 ring-2 ring-red-500/30" : "border-ink"} ${busy ? "opacity-50" : ""}`}
+              className={`relative flex flex-col items-center gap-1 p-1 border-2 bg-card transition-colors cursor-pointer ${isSel ? "border-red-500 ring-2 ring-red-500/30" : "border-transparent hover:border-secondary"} ${busy ? "opacity-50" : ""}`}
             >
               <img src={s.url} alt={s.id} className="w-full h-[88px] object-contain" />
               <span className="text-[10px] font-mono text-secondary">{s.id}</span>
