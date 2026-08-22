@@ -148,13 +148,13 @@ export default function GamesPage() {
           </div>
         ))}
 
-        {/* 导入入口 → 独立导入页（多页正反交替 PDF） */}
+        {/* 新建桌游入口 → lab 组装工作台（反复导入多个 PDF 组装为一个桌游） */}
         <button
           className="dashed-zone min-w-[180px] flex flex-col items-center justify-center gap-2 text-muted hover:text-primary cursor-pointer bg-card p-4"
-          onClick={() => router.push("/import")}
+          onClick={() => router.push("/lab")}
         >
           <span className="text-2xl">+</span>
-          <span className="text-sm">导入 PDF 桌游</span>
+          <span className="text-sm">新建桌游</span>
         </button>
       </div>
 

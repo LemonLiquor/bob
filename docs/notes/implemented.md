@@ -3,6 +3,32 @@
 > 记录决定了什么 + 否决了什么，**与代码保持同步**（代码改名/移动时同步更新事实）。
 > 单文件多条目，小项目不建目录；条目按日期倒序。
 
+## Lab 组装工作台：Import 翻转为主视图 + 多 PDF 导入 + indexDB 草稿
+
+- **日期**：2026-08-22（首次提出）
+- **主题**：导入页从"导入为主、Lab 收尾"翻转为"**Lab 为主体**，可反复通过弹窗导入多个 PDF 实体，整体组装为一个桌游"（一个 PnP 桌游多个待打印 PDF，按部分打印最后组装）
+
+**决定了什么**：
+
+- **路由** `/lab` = 桌游组装工作台（原 `/import` 改名）；广场入口「新建桌游」
+- **ImportFlow 组件化 + 弹窗**：`components/import/ImportFlow.tsx` 原样复用四段流程（选 PDF → 切割 → 实体定义+图片池 → 实体组 → 导入），不分步改造；弹窗提交后关闭，实体以确定性网格空位（`40 + (idx%5)*300, 40 + floor(idx/5)*320`）上桌，可反复导入
+- **工作区 = 全部桌游数据**：`sprites` + `prefabs` + `labState`（布局坐标），与生产架构"资产与状态分离"一致；导入 commit = `buildGameFromGroups(groups, sizes, entityN0, pileN0)` → 合并 + 网格摆位；上传/草稿直接读工作区
+- **id 全局计数器**（sprite/entity/pile）：页面存活期不重置，跨批次不碰撞；`buildGameFromGroups` 参数化 `entityN0`/`pileN0`，pile id 从 `pile-{ts+gi}` 改 `pile-{pileN0+gi}`（opaque 无依赖）；恢复草稿时按现有 id 最大序号 +1 续
+- **草稿 = indexDB**（`lib/storage/draft.ts`，bob-draft 单槽位）：形状与上传格式同构（meta + assets + 无座 initialState）；**纯手动 [保存] 按钮**（无自动保存、无状态提示）；进入 `/lab` 自动恢复 + 右上角「草稿已恢复 · 丢弃」chip；上传成功后清草稿
+- **上传**：组装 meta + assets + initialState（强制 `seats: []`）→ 原 `upload_game` 链路；`game_uploaded` 匹配 gameId → 清草稿 + 跳广场
+- **Lab 编辑（本地，不进协议）**：hover 实体按 Delete 删除（引擎导出 `removeEntity` 纯函数：出堆 + 剩余 ≤1 张散堆 + 删实例）；Ctrl/Cmd+D 复制（同 prefab 新实例，偏移 (24,24)，z 置顶，自由牌，`preventDefault` 阻止浏览器书签）；GameBoard 可选 `labMode` prop，play/room 不受影响
+- **GeneratePanel 改造**：取消改 `onCancel`（关弹窗），生成改 [导入]（提交）
+
+**否决了什么**：
+
+- **ImportBatch 批次概念**：草稿持久化 + 单实体删除已覆盖"撤销导入"，批次（batches[] + labState 双份数据）冗余
+- **弹窗分步化**：用户否决，ImportFlow 原样复用四段流程
+- **自动保存 / 未保存状态提示**：用户明确不要，纯手动保存
+- **清空工作台按钮**：由「丢弃草稿」chip 取代（持久化下重新进入 = 恢复草稿，需丢弃入口才能重开）
+- **对局内删除实体**：需协议动作，另行评估
+- **复制整堆**：当前复制单张自由牌
+- **Lab 撤销拖摆**：需动作历史栈，不做
+
 ## Token 实体：可变尺寸 + 单面 + 圆形取图 + 分批导入工作流
 
 - **日期**：2026-08-21（首次提出）

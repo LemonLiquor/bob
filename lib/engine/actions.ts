@@ -262,6 +262,18 @@ export function flipCard(state: GameState, cardId: string): GameState {
 }
 
 /**
+ * 删除实体（Lab 本地编辑用，**不进动作注册表/协议**）：
+ * 从容器（piles/handZones）移除 + 剩余 ≤1 张解散堆 + 从实体列表删除实例。
+ * 实体不存在 → 原状态。不可变更新。
+ */
+export function removeEntity(state: GameState, entityId: string): GameState {
+  const exists = state.entities.some((e) => e.id === entityId);
+  if (!exists) return state;
+  const removed = removeCard(state, entityId);
+  return { ...removed, entities: removed.entities.filter((e) => e.id !== entityId) };
+}
+
+/**
  * 离座 / 离开房间时：座位手牌掉落为自由牌（桌面中心区域，随机小偏移散落），手牌区清空。
  */
 export function dropHandToTable(state: GameState, seatId: string): GameState {

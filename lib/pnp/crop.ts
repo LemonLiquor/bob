@@ -104,15 +104,18 @@ export async function toCircular(dataUrl: string): Promise<string> {
 
 /**
  * 实体组摊平为引擎数据：
- * - prefabs：每项一个，id `prefab-{n}` 连续；单面组 → singleFace: true 且 back 空；
+ * - prefabs：每项一个，id `prefab-{entityN0+n}` 连续；单面组 → singleFace: true 且 back 空；
  *   sizes 中按正面 spriteId 查到渲染尺寸 → 带 size，否则缺省（120×168 卡牌）
- * - entities：id `inst-{n}` 连续，坐标全 0（实际位置由牌堆承载，Lab 沙盒可调）
- * - piles：每组一个，id `pile-{ts+gi}`，entityIds 按组内顺序，坐标全 0
- * 只产结构，初始状态坐标由导入页 Lab 沙盒自定义。
+ * - entities：id `inst-{entityN0+n}` 连续，坐标全 0（实际位置由牌堆承载，Lab 沙盒可调）
+ * - piles：每组一个，id `pile-{pileN0+gi}`，entityIds 按组内顺序，坐标全 0
+ * entityN0 / pileN0：id 起始序号（多批次连续导入时由调用方传入全局计数器，避免碰撞；缺省 0）
+ * 只产结构，初始状态坐标由 Lab 沙盒自定义。
  */
 export function buildGameFromGroups(
   groups: EntityGroup[],
   sizes?: Map<string, { width: number; height: number }>,
+  entityN0 = 0,
+  pileN0 = 0,
 ): {
   prefabs: Prefab[];
   entities: EntityState[];
@@ -121,7 +124,6 @@ export function buildGameFromGroups(
   const prefabs: Prefab[] = [];
   const entities: EntityState[] = [];
   const piles: Pile[] = [];
-  const ts = Date.now();
   let n = 0;
   for (let gi = 0; gi < groups.length; gi++) {
     const group = groups[gi];
@@ -129,14 +131,14 @@ export function buildGameFromGroups(
     for (const item of group.items) {
       const size = sizes?.get(item.frontSpriteId);
       prefabs.push({
-        id: `prefab-${n}`,
+        id: `prefab-${entityN0 + n}`,
         faces: { front: item.frontSpriteId, back: group.singleFace ? "" : item.backSpriteId },
         ...(group.singleFace ? { singleFace: true } : {}),
         ...(size ? { size } : {}),
       });
       entities.push({
-        id: `inst-${n}`,
-        prefabId: `prefab-${n}`,
+        id: `inst-${entityN0 + n}`,
+        prefabId: `prefab-${entityN0 + n}`,
         faceUp: false,
         x: 0,
         y: 0,
@@ -144,10 +146,10 @@ export function buildGameFromGroups(
         ...(size ? { size } : {}), // 实例带尺寸（物理属性：不同尺寸不可堆叠）
         ...(group.singleFace ? { singleFace: true } : {}), // 实例带单面标记（引擎禁翻面）
       });
-      entityIds.push(`inst-${n}`);
+      entityIds.push(`inst-${entityN0 + n}`);
       n++;
     }
-    piles.push({ id: `pile-${ts + gi}`, entityIds, x: 0, y: 0 });
+    piles.push({ id: `pile-${pileN0 + gi}`, entityIds, x: 0, y: 0 });
   }
   return { prefabs, entities, piles };
 }

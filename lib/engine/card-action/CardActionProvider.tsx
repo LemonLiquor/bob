@@ -35,6 +35,8 @@ interface CardActionProviderProps {
   children: ReactNode;
   onFlip: (cardId: string) => void;
   onDraw: (id: string) => void;      // id 为悬停牌 id：抓入手牌区（自由牌 / 牌堆顶牌均可）
+  onDelete?: (id: string) => void;   // Lab 编辑：Delete 键删除悬停实体（可选，不进协议）
+  onCopy?: (id: string) => void;     // Lab 编辑：Ctrl/Cmd+D 复制悬停实体（可选，不进协议）
   disabled?: boolean;
 }
 
@@ -42,17 +44,23 @@ export default function CardActionProvider({
   children,
   onFlip,
   onDraw,
+  onDelete,
+  onCopy,
   disabled = false,
 }: CardActionProviderProps) {
   const activeIdRef = useRef<string | null>(null);
 
   const onFlipRef = useRef(onFlip);
   const onDrawRef = useRef(onDraw);
+  const onDeleteRef = useRef(onDelete);
+  const onCopyRef = useRef(onCopy);
   const disabledRef = useRef(disabled);
 
   useEffect(() => {
     onFlipRef.current = onFlip;
     onDrawRef.current = onDraw;
+    onDeleteRef.current = onDelete;
+    onCopyRef.current = onCopy;
     disabledRef.current = disabled;
   });
 
@@ -88,8 +96,15 @@ export default function CardActionProvider({
       if (!id) return;
 
       const lower = e.key.toLowerCase();
+      // 复制（Ctrl/Cmd+D）：preventDefault 阻止浏览器书签快捷键；优先级高于抓牌（D）
+      if ((e.ctrlKey || e.metaKey) && lower === "d") {
+        e.preventDefault();
+        onCopyRef.current?.(id);
+        return;
+      }
       if (lower === "f") onFlipRef.current(id);
       if (lower === "d") onDrawRef.current(id);
+      if (e.key === "Delete") onDeleteRef.current?.(id);
     };
 
     window.addEventListener("keydown", handleKeyDown);

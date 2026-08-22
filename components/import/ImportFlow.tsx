@@ -1,29 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRef, useState } from "react";
 import { getPageCount, renderPageToCanvas } from "@/lib/pnp/pdf";
-import { cropGrid, buildGameFromGroups, mirrorBackIndex, toCircular, DEFAULT_CROP, type CropConfig, type EntityGroup } from "@/lib/pnp/crop";
-import type { GameAction, GameState, Sprite } from "@/lib/engine/types";
-import { applyAction } from "@/lib/engine";
-import { setAssets } from "@/lib/assets/cache";
-import { send, onMessage } from "@/lib/multiplayer/transport";
-import type { ServerMessage } from "@/lib/multiplayer/protocol";
-import GameBoard from "@/components/game/GameBoard";
+import { cropGrid, mirrorBackIndex, toCircular, DEFAULT_CROP, type CropConfig, type EntityGroup } from "@/lib/pnp/crop";
+import type { Sprite } from "@/lib/engine/types";
 import PagePicker from "@/components/import/PagePicker";
 import CropParams from "@/components/import/CropParams";
 import PagePreviews from "@/components/import/PagePreviews";
 import EntityPanel from "@/components/import/EntityPanel";
 import SpritePool from "@/components/import/SpritePool";
 import EntityGroupBuilder, { type Picker } from "@/components/import/EntityGroupBuilder";
-import GeneratePanel, { type PendingUpload } from "@/components/import/GeneratePanel";
+import GeneratePanel from "@/components/import/GeneratePanel";
 import type { PreviewData } from "@/components/import/GridPreview";
 
 // ============================================================
-// PnP PDF 导入页 — 状态与逻辑中枢，UI 拆分至 components/import/
+// ImportFlow — PnP PDF 导入流程（弹窗，切片 3b）
 // 流程：选 PDF → 页面多选 → 切割参数 → 预览 → 实体定义 → 图片池 → 实体组组装
-//       → 生成桌游 → Lab 沙盒摆布局 → 保存并上传（meta+assets+无座 initialState）
+//       → [导入] 提交（onCommit 上桌，页面负责摊平/摆位/合并）
+// 状态全部内部自持；sprite id 由工作区 allocSpriteId 分配（跨批次不重复）。
 // ============================================================
 
 const CROP_STORAGE_KEY = "import_crop_params";
@@ -74,7 +68,19 @@ function saveCropParams(rows: number, cols: number, crop: CropConfig): void {
   }
 }
 
-export default function ImportPage() {
+interface ImportFlowProps {
+  onClose: () => void; // 关闭弹窗回工作台
+  allocSpriteId: () => string; // 工作区全局 sprite id 分配（跨批次永不重复）
+  onCommit: (payload: {
+    sprites: Sprite[];
+    groups: EntityGroup[];
+    sizes: Map<string, { width: number; height: number }>;
+    fileName: string;
+    name: string;
+  }) => void; // 提交本批次（页面负责摊平/摆位/合并工作区）
+}
+
+export default function ImportFlow({ onClose, allocSpriteId, onCommit }: ImportFlowProps) {
   const [file, setFile] = useState<File | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [initCrop] = useState(loadCropParams); // 进入页面恢复上次切割参数
@@ -82,11 +88,9 @@ export default function ImportPage() {
   const [cols, setCols] = useState(initCrop.cols);
   const [crop, setCrop] = useState<CropConfig>(initCrop.crop);
   const [name, setName] = useState("");
-  const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
   const [sprites, setSprites] = useState<Sprite[]>([]); // 全量累积（实体组引用的旧批次保留，生成全量上传）
   const [lastBatch, setLastBatch] = useState<Sprite[]>([]); // 最近一次切割结果（实体定义面板/图片池显示）
   const [pageSprites, setPageSprites] = useState<Map<number, Sprite[]>>(new Map()); // 页号 → 该页最新批次（自动组卡用）
-  const spriteCounterRef = useRef(0); // sprite id 全局递增（永不重用；换文件重置）
   const [poolFilter, setPoolFilter] = useState<Set<string>>(new Set()); // 实体定义选中集（图片池显示过滤）
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
@@ -99,30 +103,10 @@ export default function ImportPage() {
   const [shapeBusy, setShapeBusy] = useState<Set<string>>(new Set());
   const originalUrlsRef = useRef<Map<string, string>>(new Map()); // 原始矩形 dataURL（恢复用）
   const loadToken = useRef(0); // 防止换文件后旧预览乱序覆盖
-  const [view, setView] = useState<"import" | "lab">("import");
-  const [labState, setLabState] = useState<GameState | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const pendingGameIdRef = useRef<string | null>(null); // 上传中的 gameId（匹配 game_uploaded）
   const fileRef = useRef<HTMLInputElement>(null);
-  const router = useRouter();
-
-  // 上传结果：成功（匹配 gameId）→ 跳转游戏广场；失败 → 恢复可重试
-  useEffect(() => {
-    const unsub = onMessage((msg: ServerMessage) => {
-      if (msg.type === "game_uploaded" && msg.gameId === pendingGameIdRef.current) {
-        pendingGameIdRef.current = null;
-        router.push("/games");
-      } else if (msg.type === "error" && pendingGameIdRef.current) {
-        pendingGameIdRef.current = null;
-        setUploading(false);
-        setError("上传失败，请重试");
-      }
-    });
-    return unsub;
-  }, [router]);
 
   async function loadPreview(f: File, page: number): Promise<PreviewData> {
     const canvas = await renderPageToCanvas(f, page);
@@ -152,12 +136,10 @@ export default function ImportPage() {
       setSprites([]);
       setLastBatch([]);
       setPageSprites(new Map());
-      spriteCounterRef.current = 0;
       setPoolFilter(new Set());
       setSelected(new Set());
       setGroups([]);
       setPicker(null);
-      setPendingUpload(null);
       setShapes(new Map());
       setSizes(new Map());
       setShapeBusy(new Set());
@@ -213,7 +195,7 @@ export default function ImportPage() {
         setProgress(`正在切割第 ${page}/${pageCount} 页（勾选 ${pages.length} 页）...`);
         const canvas = await renderPageToCanvas(file, page);
         const urls = cropGrid(canvas, rows, cols, crop);
-        const pageBatch: Sprite[] = urls.map((url) => ({ id: `sprite-${spriteCounterRef.current++}`, url }));
+        const pageBatch: Sprite[] = urls.map((url) => ({ id: allocSpriteId(), url }));
         pageBatches.set(page, pageBatch);
         allBatch.push(...pageBatch);
       }
@@ -236,54 +218,14 @@ export default function ImportPage() {
     }
   }
 
-  /** 生成桌游数据 json（坐标 0），资产入缓存后直接进入 Lab 沙盒调整初始布局 */
-  function handleGenerate() {
+  /** 导入：提交本批次到工作区（页面摊平/摆位/合并） + 关弹窗 */
+  function handleImport() {
     if (!file || sprites.length === 0 || !name.trim()) return;
-    const { prefabs, entities, piles } = buildGameFromGroups(groups, sizes);
-    const payload: PendingUpload = {
-      meta: { id: `pnp-${Date.now()}`, name: name.trim(), icon: "🖼️" },
-      assets: { sprites, prefabs },
-      initialState: { entities, piles, seats: [] },
-    };
-    setPendingUpload(payload);
-    // 验收打印：prefabs 含 size/singleFace，url 截断摘要
-    console.log("generated:", {
-      meta: payload.meta,
-      assets: {
-        sprites: payload.assets.sprites.map((s) => ({ id: s.id, url: s.url.slice(0, 60) + `…(${s.url.length})` })),
-        prefabs: payload.assets.prefabs,
-      },
-      initialState: payload.initialState,
-    });
-    // 资产入缓存（Lab 渲染必需：getPrefabFaces 按 prefabId 查表）
-    setAssets(payload.assets);
-    setLabState(payload.initialState);
-    setView("lab");
+    onCommit({ sprites, groups, sizes, fileName: file.name, name: name.trim() });
+    onClose();
   }
 
-  /** S4c：保存坐标 + 直接上传（保存并上传） */
-  function handleSaveAndUpload() {
-    if (!labState || !pendingUpload || uploading) return;
-    const initialState: GameState = { ...labState, seats: [] };
-    const payload: PendingUpload = { ...pendingUpload, initialState };
-    setPendingUpload(payload);
-    setUploading(true);
-    setError(null);
-    pendingGameIdRef.current = payload.meta.id;
-    send({ type: "upload_game", meta: payload.meta, assets: payload.assets, initialState: payload.initialState });
-  }
-
-  /** S4b Lab：放弃本次调整，返回导入页（不写回） */
-  function handleDiscardLab() {
-    setView("import");
-  }
-
-  /** S4b Lab：本地 applyAction（复用引擎，与服务端同分发） */
-  function handleLabAction(action: GameAction) {
-    setLabState((prev) => (prev ? applyAction(prev, action) : prev));
-  }
-
-  /** S1 实体定义：切换单图形状（矩形 ↔ 圆形）。圆形 = canvas 遮罩生成透明 PNG，原始暂存可恢复 */
+  /** 实体定义：切换单图形状（矩形 ↔ 圆形）。圆形 = canvas 遮罩生成透明 PNG，原始暂存可恢复 */
   async function handleToggleShape(id: string) {
     const current = shapes.get(id) ?? "rect";
     if (current === "rect") {
@@ -317,7 +259,7 @@ export default function ImportPage() {
     }
   }
 
-  /** S1 实体定义：批量切换形状（串行处理） */
+  /** 实体定义：批量切换形状（串行处理） */
   async function handleBatchShape(ids: string[], shape: "rect" | "circle") {
     for (const id of ids) {
       if ((shapes.get(id) ?? "rect") === shape) continue;
@@ -325,7 +267,7 @@ export default function ImportPage() {
     }
   }
 
-  /** S1 实体定义：批量设置渲染大小 */
+  /** 实体定义：批量设置渲染大小 */
   function handleBatchSize(ids: string[], size: { width: number; height: number }) {
     setSizes((prev) => {
       const next = new Map(prev);
@@ -379,7 +321,6 @@ export default function ImportPage() {
   /** 新建实体组：当前选中的图片 → 正面列表，随后进入选背面模式 */
   function handleAddGroup() {
     if (selected.size === 0) return;
-    if (selected.size === 0) return;
     const newGroup: EntityGroup = { items: Array.from(selected).map((id) => ({ frontSpriteId: id, backSpriteId: "" })) };
     const next = [...groups, newGroup];
     setGroups(next);
@@ -413,7 +354,7 @@ export default function ImportPage() {
     setPicker(null);
   }
 
-  /** S5 页对预设：勾选页按顺序两两配对，全部合入**一个实体组**
+  /** 页对预设：勾选页按顺序两两配对，全部合入**一个实体组**
    *  （正面 = 前页切图，背面 = 后页镜像图；奇数页最后一对无背面 = 默认卡背）
    *  按页号取该页最新批次（不依赖 id 连续性） */
   function handleAutoPairGroups() {
@@ -449,42 +390,10 @@ export default function ImportPage() {
     });
   }
 
-  // S4b Lab：全屏沙盒视图（无座，拖摆初始布局）
-  if (view === "lab" && labState) {
-    return (
-      // (main) 布局无全屏高度，h-screen 容器给 GameBoard 的 h-full 提供继承高度
-      <div className="h-screen">
-        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-card border-2 border-ink px-4 py-2">
-          <span className="text-sm font-bold">Lab — 调整初始布局</span>
-          <span className="text-[11px] text-muted">拖动卡牌/牌堆摆放初始位置（无座）</span>
-        </div>
-        {error && (
-          <p className="fixed top-14 left-1/2 -translate-x-1/2 z-50 text-red-500 text-xs bg-card border-2 border-red-500 px-2 py-1">
-            {error}
-          </p>
-        )}
-        <button className="btn-ghost fixed bottom-3 left-3 z-50 text-xs" onClick={handleDiscardLab}>
-          放弃返回
-        </button>
-        <button
-          className="btn-pop fixed bottom-3 right-3 z-50 text-xs"
-          onClick={handleSaveAndUpload}
-          disabled={uploading}
-        >
-          {uploading ? "上传中..." : "保存并上传"}
-        </button>
-        <GameBoard gameState={labState} onAction={handleLabAction} />
-      </div>
-    );
-  }
-
   return (
     <main className="p-8 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold">PnP PDF 导入</h2>
-        <Link href="/games" className="link-pop text-sm">
-          ← 返回游戏广场
-        </Link>
       </div>
 
       {/* 选择 PDF */}
@@ -582,8 +491,9 @@ export default function ImportPage() {
       <GeneratePanel
         name={name}
         onNameChange={setName}
-        canGenerate={!!file && sprites.length > 0 && !!name.trim()}
-        onGenerate={handleGenerate}
+        canImport={!!file && sprites.length > 0 && !!name.trim()}
+        onImport={handleImport}
+        onCancel={onClose}
       />
 
       {error && <p className="mt-2 text-red-500 text-sm">{error}</p>}

@@ -2,7 +2,7 @@ export type { Sprite, Prefab, GameAssets, EntityState, Pile, HandZone, Seat, Gam
 export { applyAction, findCards } from "./reducers";
 export {
   moveCard, moveCardToHand, moveCardFromHand, moveCardToPile, moveCardFromPile,
-  shufflePile, flipCard, findOverlap, dropHandToTable,
+  shufflePile, flipCard, findOverlap, dropHandToTable, removeEntity,
 } from "./actions";
 export type { OverlapTarget } from "./actions";
 export { createSeat, createSeatFromTemplate, DEFAULT_SEAT_TEMPLATE } from "./demo-data";

@@ -28,9 +28,12 @@ interface GameBoardProps {
   gameState?: GameState;
   onAction?: (action: GameAction) => void;
   initialState?: GameState; // 非受控模式下的初始状态
+  labMode?: boolean; // Lab 编辑模式：启用 Delete 删除 / Ctrl+D 复制（可选，不进协议）
+  onLabDelete?: (id: string) => void;
+  onLabCopy?: (id: string) => void;
 }
 
-export default function GameBoard({ gameState: propState, onAction, initialState }: GameBoardProps) {
+export default function GameBoard({ gameState: propState, onAction, initialState, labMode, onLabDelete, onLabCopy }: GameBoardProps) {
   const controlled = propState !== undefined && onAction !== undefined;
 
   const [internalState, setInternalState] = useState<GameState>(() => {
@@ -206,6 +209,8 @@ export default function GameBoard({ gameState: propState, onAction, initialState
         <CardActionProvider
           onFlip={handleFlip}
           onDraw={handleDraw}
+          onDelete={labMode ? onLabDelete : undefined}
+          onCopy={labMode ? onLabCopy : undefined}
           disabled={isDragging}
         >
           {/* 自由牌 */}
