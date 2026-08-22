@@ -109,6 +109,62 @@ export default function GameBoard({ gameState: propState, onAction, initialState
     | null
   >(null);
 
+  // 桌面缩放/平移（会话 UI 状态，不入存档）：渲染容器 translate(pan) scale(zoom)，origin 0 0
+  const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
+  const viewRef = useRef(view);
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+  const mainRef = useRef<HTMLElement>(null);
+  const panRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
+
+  // 视口 → 桌面坐标（引擎 state 语义）
+  const toDesk = useCallback((vx: number, vy: number) => {
+    const v = viewRef.current;
+    return { x: (vx - v.x) / v.zoom, y: (vy - v.y) / v.zoom };
+  }, []);
+
+  // 滚轮缩放（鼠标为中心，保持鼠标下的桌面点不动）+ 拖拽空白平移
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const v = viewRef.current;
+      const rect = el.getBoundingClientRect();
+      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      const nz = Math.min(4, Math.max(0.2, v.zoom * factor));
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const dx = (mx - v.x) / v.zoom; // 鼠标下的桌面点（缩放前）
+      const dy = (my - v.y) / v.zoom;
+      setView({ x: mx - dx * nz, y: my - dy * nz, zoom: nz });
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.closest("[data-card-id]") || t.closest('[id^="pile-"]')) return; // 卡片/牌堆上不平移
+      panRef.current = { sx: e.clientX, sy: e.clientY, ox: viewRef.current.x, oy: viewRef.current.y };
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      const p = panRef.current;
+      if (!p) return;
+      setView((v) => ({ ...v, x: p.ox + (e.clientX - p.sx), y: p.oy + (e.clientY - p.sy) }));
+    };
+    const onPointerUp = () => {
+      panRef.current = null;
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    el.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, []);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor),
@@ -160,10 +216,11 @@ export default function GameBoard({ gameState: propState, onAction, initialState
     const translated = active.rect.current.translated;
     if (!translated) return;
 
-    // 整堆移动：防误触（几乎没移动则不处理）
+    // 整堆移动：防误触（几乎没移动则不处理）；落点视口 → 桌面
     if (start.kind === "pile") {
       if (Math.abs(translated.left - start.x) > 2 || Math.abs(translated.top - start.y) > 2) {
-        dispatch({ type: "move_pile", pileId: start.pileId, x: translated.left, y: translated.top });
+        const p = toDesk(translated.left, translated.top);
+        dispatch({ type: "move_pile", pileId: start.pileId, x: p.x, y: p.y });
       }
       return;
     }
@@ -186,12 +243,13 @@ export default function GameBoard({ gameState: propState, onAction, initialState
       }
     }
 
-    // 桌面：落点 = 拖拽中真实位置（translated，含 transform，与视觉一致）。
-    // 版图旋转 = 引擎几何（size 已 swap），包围盒恒等于引擎坐标 → 零换算直接落点。
-    const x = translated.left;
-    const y = translated.top;
-    // 防误触：几乎没移动则不处理
-    if (Math.abs(x - start.x) > 2 || Math.abs(y - start.y) > 2) {
+    // 桌面：落点 = 拖拽中真实位置（translated 视口坐标 → 桌面坐标）
+    // 版图旋转 = 有效尺寸分支渲染，包围盒恒等于引擎坐标，无额外换算
+    const p = toDesk(translated.left, translated.top);
+    const x = p.x;
+    const y = p.y;
+    // 防误触：几乎没移动则不处理（比较仍用视口坐标）
+    if (Math.abs(translated.left - start.x) > 2 || Math.abs(translated.top - start.y) > 2) {
       dispatch({ type: "move_card", cardId, x, y });
     }
   }
@@ -208,6 +266,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
 
   return (
     <main
+      ref={mainRef}
       className="h-full board-area relative overflow-hidden"
     >
       <DndContext
@@ -224,26 +283,38 @@ export default function GameBoard({ gameState: propState, onAction, initialState
           onCopy={labMode ? onLabCopy : undefined}
           disabled={isDragging}
         >
-          {/* 自由牌 */}
-          {freeCards.map((card) => (
-            <div
-              key={card.id}
-              style={{ position: "absolute", left: card.x, top: card.y, zIndex: card.zIndex }}
-            >
-              <Card card={card} draggable />
-            </div>
-          ))}
+          {/* 桌面内容（缩放/平移容器；手牌区等屏幕 UI 在容器外不受影响） */}
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`,
+              transformOrigin: "0 0",
+            }}
+          >
+            {/* 自由牌 */}
+            {freeCards.map((card) => (
+              <div
+                key={card.id}
+                style={{ position: "absolute", left: card.x, top: card.y, zIndex: card.zIndex }}
+              >
+                <Card card={card} draggable zoom={view.zoom} />
+              </div>
+            ))}
 
-          {/* 牌堆 */}
-          {gameState.piles.map((pile) => (
-            <Pile
-              key={pile.id}
-              pile={pile}
-              cards={findCards(gameState, pile.entityIds)}
-              onShuffle={handleShufflePile}
-              shiftHeld={shiftHeld}
-            />
-          ))}
+            {/* 牌堆 */}
+            {gameState.piles.map((pile) => (
+              <Pile
+                key={pile.id}
+                pile={pile}
+                cards={findCards(gameState, pile.entityIds)}
+                onShuffle={handleShufflePile}
+                shiftHeld={shiftHeld}
+                zoom={view.zoom}
+              />
+            ))}
+          </div>
 
           {/* 自己的手牌区（屏幕底部，spread 展开） */}
           {mySeat && (

@@ -3,6 +3,25 @@
 > 记录决定了什么 + 否决了什么，**与代码保持同步**（代码改名/移动时同步更新事实）。
 > 单文件多条目，小项目不建目录；条目按日期倒序。
 
+## 桌面缩放/平移：容器 transform + UI 层坐标换算（引擎零改动）
+
+- **日期**：2026-08-22（首次提出）
+- **主题**：GameBoard 桌面支持缩放（滚轮、鼠标为中心）与平移（拖拽空白处），lab / 试玩 / 对局全模式生效
+
+**决定了什么**：
+
+- **两层坐标系**：引擎 state = 桌面坐标（不变）；渲染容器 `translate(pan) scale(zoom)`（origin 0 0）；换算只在 UI 层
+- **换算两处**：dragEnd 落点 `desktop = (viewport - pan) / zoom`（translated 是视口坐标）；拖拽中 transform **÷zoom**（Card/Pile 在缩放容器内，否则视觉位移被放大 zoom 倍不跟手）；HandZone（容器外屏幕 UI）用 zoom=1 不变
+- **鼠标中心缩放**：wheel 时保持鼠标下的桌面点不动（`view' = mouse - deskPoint·zoom'`）
+- **平移**：拖拽 main 空白处（target 非卡片/牌堆）
+- **不受影响**：悬停按键（elementFromPoint 基于渲染像素）、dnd-kit over 检测（视口 rect）、引擎 findOverlap/placeAt（桌面坐标）、lab 网格摆位/草稿坐标
+- **view（zoom/pan）为会话 UI 状态**，不入草稿/存档/协议
+
+**否决了什么**：
+
+- **缩放/平移进引擎或存档**：纯 UI 状态，会话内有效即可
+- **缩放锚点按钮（左上角）**：用户选鼠标中心（体验版）
+
 ## 实体类型判别联合（kind）+ 版图旋转：Prefab 模板不承担能力字段，Entity 公共状态字段带默认值
 
 - **日期**：2026-08-22（首次提出）

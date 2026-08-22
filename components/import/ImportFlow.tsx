@@ -446,33 +446,39 @@ export default function ImportFlow({ onClose, allocSpriteId, onCommit }: ImportF
             />
           )}
           {(() => {
-            // 图片池 = 实体定义选中集（基于最近一次切割）
+            // 图片池 = 实体定义选中集（基于最近一次切割）；实体组板块与图片池同现同隐（无图可组时不显示）
             const poolSprites = poolFilter.size > 0 ? lastBatch.filter((s) => poolFilter.has(s.id)) : [];
-            return poolSprites.length > 0 ? (
-              <SpritePool
-                sprites={poolSprites}
-                selected={selected}
-                onToggle={handleSpriteClick}
-                onSelectAll={() => setSelected(new Set(poolSprites.map((s) => s.id)))}
-                onSelectNone={() => setSelected(new Set())}
-              />
-            ) : (
-              <p className="text-[11px] text-muted mt-2">
-                图片池仅显示实体定义面板中选中的图片；请先在实体定义面板全选或点选图片
-              </p>
+            return (
+              <>
+                {poolSprites.length > 0 ? (
+                  <SpritePool
+                    sprites={poolSprites}
+                    selected={selected}
+                    onToggle={handleSpriteClick}
+                    onSelectAll={() => setSelected(new Set(poolSprites.map((s) => s.id)))}
+                    onSelectNone={() => setSelected(new Set())}
+                  />
+                ) : (
+                  <p className="text-[11px] text-muted mt-2">
+                    图片池仅显示实体定义面板中选中的图片；请先在实体定义面板全选或点选图片
+                  </p>
+                )}
+                {poolSprites.length > 0 && (
+                  <EntityGroupBuilder
+                    groups={groups}
+                    sprites={sprites}
+                    picker={picker}
+                    selectedCount={selected.size}
+                    onAddGroup={handleAddGroup}
+                    onAutoPair={handleAutoPairGroups}
+                    onRemoveItem={handleRemoveItem}
+                    onRemoveGroup={handleRemoveGroup}
+                    onSetPicker={setPicker}
+                  />
+                )}
+              </>
             );
           })()}
-          <EntityGroupBuilder
-            groups={groups}
-            sprites={sprites}
-            picker={picker}
-            selectedCount={selected.size}
-            onAddGroup={handleAddGroup}
-            onAutoPair={handleAutoPairGroups}
-            onRemoveItem={handleRemoveItem}
-            onRemoveGroup={handleRemoveGroup}
-            onSetPicker={setPicker}
-          />
         </>
       )}
 

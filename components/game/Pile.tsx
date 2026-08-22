@@ -12,9 +12,10 @@ interface PileProps {
   cards: EntityState[];  // 按从下到上顺序
   onShuffle: (pileId: string) => void;
   shiftHeld: boolean; // Shift 按住 → 顶牌禁拖，整堆 draggable 接管（整体移动）
+  zoom?: number; // 所在容器缩放倍数：拖拽位移（视口）÷zoom 使视觉跟手
 }
 
-export default function Pile({ pile, cards, onShuffle, shiftHeld }: PileProps) {
+export default function Pile({ pile, cards, onShuffle, shiftHeld, zoom = 1 }: PileProps) {
   // 容器同时是 droppable（牌拖入堆）与 draggable（整堆移动）：
   // - 非 Shift 拖顶牌 → 顶牌 draggable 激活（单牌）
   // - Shift 按住 → 顶牌 disabled → sensor 向上找到容器 → 整堆
@@ -59,12 +60,22 @@ export default function Pile({ pile, cards, onShuffle, shiftHeld }: PileProps) {
     setDragNodeRef(el);
   };
 
+  // 拖拽位移（视口坐标）应用在缩放容器内 → 除以 zoom 抵消容器放大，视觉位移 = 鼠标位移
+  const dragTransform = transform
+    ? CSS.Translate.toString({
+        x: transform.x / zoom,
+        y: transform.y / zoom,
+        scaleX: transform.scaleX,
+        scaleY: transform.scaleY,
+      })
+    : "";
+
   const containerStyle: React.CSSProperties = {
     left: pile.x,
     top: pile.y,
     width: pw,
     height: ph,
-    transform: CSS.Translate.toString(transform),
+    transform: dragTransform,
   };
 
   return (
@@ -87,7 +98,7 @@ export default function Pile({ pile, cards, onShuffle, shiftHeld }: PileProps) {
             top: offsets[i].offsetY,
           }}
         >
-          <Card card={card} draggable={i === count - 1 && !shiftHeld} />
+          <Card card={card} draggable={i === count - 1 && !shiftHeld} zoom={zoom} />
         </div>
       ))}
 

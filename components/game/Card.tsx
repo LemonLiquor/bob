@@ -11,15 +11,24 @@ interface CardProps {
   card: EntityState;
   children?: React.ReactNode;
   draggable?: boolean;
+  zoom?: number; // 所在容器缩放倍数：拖拽位移（视口）÷zoom 使视觉跟手
 }
 
-export default function Card({ card, children, draggable = false }: CardProps) {
+export default function Card({ card, children, draggable = false, zoom = 1 }: CardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: card.id,
     disabled: !draggable,
   });
 
-  const dragTransform = CSS.Translate.toString(transform);
+  // 拖拽位移（视口坐标）应用在缩放容器内 → 除以 zoom 抵消容器放大，视觉位移 = 鼠标位移
+  const dragTransform = transform
+    ? CSS.Translate.toString({
+        x: transform.x / zoom,
+        y: transform.y / zoom,
+        scaleX: transform.scaleX,
+        scaleY: transform.scaleY,
+      })
+    : "";
 
   const { isHovered, hoverProps } = useHoverable({ id: card.id });
 
