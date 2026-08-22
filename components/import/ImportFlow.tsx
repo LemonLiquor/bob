@@ -318,14 +318,15 @@ export default function ImportFlow({ onClose, allocSpriteId, onCommit }: ImportF
     toggleSprite(id);
   }
 
-  /** 新建实体组：当前选中的图片 → 正面列表，随后进入选背面模式 */
-  function handleAddGroup() {
+  /** 新建实体组：当前选中的图片 → 正面列表（默认卡牌组），随后进入选背面模式 */
+  /** 新建实体组：按类型（卡牌/Token/版图）。仅卡牌进入选背面；token/board 单面直接完成 */
+  function handleAddGroup(kind: EntityGroup["kind"]) {
     if (selected.size === 0) return;
-    const newGroup: EntityGroup = { items: Array.from(selected).map((id) => ({ frontSpriteId: id, backSpriteId: "" })) };
+    const newGroup: EntityGroup = { kind, items: Array.from(selected).map((id) => ({ frontSpriteId: id, backSpriteId: "" })) };
     const next = [...groups, newGroup];
     setGroups(next);
     setSelected(new Set());
-    setPicker({ type: "back", groupIdx: next.length - 1 });
+    setPicker(kind === "card" ? { type: "back", groupIdx: next.length - 1 } : null);
   }
 
   function handleRemoveItem(groupIdx: number, itemIdx: number) {
@@ -340,18 +341,6 @@ export default function ImportFlow({ onClose, allocSpriteId, onCommit }: ImportF
       const next = prev.filter((_, i) => i !== groupIdx);
       return next;
     });
-  }
-
-  /** 单面实体（正反面一样）：组标记 singleFace，back 清空（渲染永远正面，F 翻面无效果） */
-  function handleSameFaces(groupIdx: number) {
-    setGroups((prev) =>
-      prev.map((g, i) =>
-        i === groupIdx
-          ? { ...g, singleFace: true, items: g.items.map((it) => ({ ...it, backSpriteId: "" })) }
-          : g,
-      ),
-    );
-    setPicker(null);
   }
 
   /** 页对预设：勾选页按顺序两两配对，全部合入**一个实体组**
@@ -371,7 +360,7 @@ export default function ImportFlow({ onClose, allocSpriteId, onCommit }: ImportF
         });
       }
     }
-    setGroups((prev) => [...prev, { items }]);
+    setGroups((prev) => [...prev, { kind: "card", items }]);
   }
 
   function togglePage(page: number) {
@@ -483,7 +472,6 @@ export default function ImportFlow({ onClose, allocSpriteId, onCommit }: ImportF
             onRemoveItem={handleRemoveItem}
             onRemoveGroup={handleRemoveGroup}
             onSetPicker={setPicker}
-            onSameFaces={handleSameFaces}
           />
         </>
       )}

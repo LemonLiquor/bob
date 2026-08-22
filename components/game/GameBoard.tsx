@@ -68,10 +68,20 @@ export default function GameBoard({ gameState: propState, onAction, initialState
   }, [controlled, onAction]);
 
   const handleFlip = useCallback((cardId: string) => {
-    // 单面实体禁用翻面：发送前拦截（省带宽；引擎 flipCard 防御保留）
-    if (gameState.entities.find((e) => e.id === cardId)?.singleFace) return;
+    // Token/版图单面禁翻：发送前拦截（省带宽；引擎 flipCard 防御保留）
+    if (gameState.entities.find((e) => e.id === cardId)?.kind !== "card") return;
     dispatch({ type: "flip_card", cardId });
   }, [dispatch, gameState]);
+
+  // R 键：hover 自由版图 → 顺时针旋转 90°（对局可用，协议动作；pile 内 R = 洗牌由 Pile 处理）
+  const handleRotate = useCallback(
+    (id: string) => {
+      const entity = gameState.entities.find((e) => e.id === id);
+      if (entity?.kind !== "board") return; // 仅版图可旋转
+      dispatch({ type: "rotate_entity", entityId: id });
+    },
+    [gameState, dispatch],
+  );
 
   // D 键：hover 任意牌 → 抓入手牌区（自由牌 / 牌堆顶牌 / 其他人手牌区均可，沙盒语义）
   const handleDraw = useCallback(
@@ -209,6 +219,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
         <CardActionProvider
           onFlip={handleFlip}
           onDraw={handleDraw}
+          onRotate={handleRotate}
           onDelete={labMode ? onLabDelete : undefined}
           onCopy={labMode ? onLabCopy : undefined}
           disabled={isDragging}

@@ -3,6 +3,26 @@
 > 记录决定了什么 + 否决了什么，**与代码保持同步**（代码改名/移动时同步更新事实）。
 > 单文件多条目，小项目不建目录；条目按日期倒序。
 
+## 实体类型判别联合（kind）+ 版图旋转：Prefab 模板不承担能力字段，Entity 公共状态字段带默认值
+
+- **日期**：2026-08-22（首次提出）
+- **主题**：版图类型扩展——实体从"可选字段泛化"（size/singleFace）改为 **kind 判别**：卡牌 / Token / 版图。版图支持 R 键顺时针旋转 90°；纯 JSON 数据无法用类继承，判别联合是 TS 的替代
+
+**决定了什么**：
+
+- **Prefab 判别联合**（`kind: "card" | "token" | "board"`）：faces 结构不同（card 正反、token 单面、board 单面）；**模板不承担能力字段**（无 stackable/singleFace——能力由 kind 决定，前端按 kind 区别对待）
+- **EntityState 带 kind 判别 + 公共状态字段**：`faceUp`、`rotation`（0/90/180/270）为公共字段**带默认值**（构建/迁移时赋默认，识别代价低）；客户端按 kind 限制功能（**仅 card 可翻**；board 可旋转；board 不可叠不可入手牌）
+- **singleFace 删除**：单面实体合并为 token/board（渲染恒正面、F 无效，语义相同）
+- **版图（单面）**：无背面（同 token 单面恒正面，flip 拦截）；旋转只改渲染（CSS transform），碰撞盒/叠放判定用未旋转尺寸（版图自由放置不参与堆叠）；`rotate_entity` 进协议动作（对局中也可旋转），服务端分发
+- **导入流程**：新建组时三选一（卡牌/Token/版图按钮），**仅卡牌进入选背面流程**（跳过 = 默认卡背）；token/board 单面直接完成，无背面 UI；删除【正反一样】按钮
+- **旧数据迁移**：node 脚本把现有 `server/data/games/*.json` 转换为带 kind 结构（prefab 无 kind：`singleFace` → token，否则 card；entity 按 prefab kind 补 + `rotation: 0`）
+
+**否决了什么**：
+
+- **stackable 布尔字段**：kind 已表达能力（版图不可叠），模板不再承担行为字段
+- **ItemState 严格分支专属字段**（faceUp 仅 card）：faceUp/rotation 公共带默认值，序列化/构建/识别代价更低，限制放客户端按 kind
+- **rotation 仅 board 字段收窄**：公共字段默认 0，客户端限制（与上同理）
+
 ## Lab 组装工作台：Import 翻转为主视图 + 多 PDF 导入 + indexDB 草稿
 
 - **日期**：2026-08-22（首次提出）

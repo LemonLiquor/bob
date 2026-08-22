@@ -2,7 +2,7 @@
 // PnP 裁切 — 网格裁切（手动边距/间隔参数）+ 双面打印镜像配对 + 卡组摊平
 // ============================================================
 
-import type { EntityState, Pile, Prefab, Sprite } from "../engine/types";
+import type { EntityKind, EntityState, Pile, Prefab } from "../engine/types";
 
 /** 裁切配置（单位：canvas 像素，pdf.js scale 2 渲染） */
 export interface CropConfig {
@@ -74,8 +74,8 @@ export function mirrorBackIndex(frontIndex: number, cols: number): number {
 
 /** 实体组（页面内临时结构，不进协议/存储）：每组一个牌堆，每项引用图片池 sprite id */
 export interface EntityGroup {
-  items: { frontSpriteId: string; backSpriteId: string }[]; // backSpriteId 空串 = 默认卡背
-  singleFace?: boolean; // 组级：单面实体（正反面一样）→ prefab singleFace: true 且 back 空
+  kind: EntityKind; // 组级类型：card / token / board（导入时选择；能力由 kind 决定）
+  items: { frontSpriteId: string; backSpriteId: string }[]; // backSpriteId 空串 = 默认卡背（card）/ 无背面（token/board）
 }
 
 /**
@@ -104,9 +104,11 @@ export async function toCircular(dataUrl: string): Promise<string> {
 
 /**
  * 实体组摊平为引擎数据：
- * - prefabs：每项一个，id `prefab-{entityN0+n}` 连续；单面组 → singleFace: true 且 back 空；
+ * - prefabs：每项一个，id `prefab-{entityN0+n}` 连续；按组 kind 产判别联合：
+ *   card → faces { front, back }（back 空 = 默认卡背）；token → faces { front }（单面）；board → faces { front, back? }
  *   sizes 中按正面 spriteId 查到渲染尺寸 → 带 size，否则缺省（120×168 卡牌）
- * - entities：id `inst-{entityN0+n}` 连续，坐标全 0（实际位置由牌堆承载，Lab 沙盒可调）
+ * - entities：id `inst-{entityN0+n}` 连续，坐标全 0（实际位置由牌堆承载，Lab 沙盒可调）；
+ *   kind 从组复制；faceUp 默认（card false / token·board true）；rotation 0
  * - piles：每组一个，id `pile-{pileN0+gi}`，entityIds 按组内顺序，坐标全 0
  * entityN0 / pileN0：id 起始序号（多批次连续导入时由调用方传入全局计数器，避免碰撞；缺省 0）
  * 只产结构，初始状态坐标由 Lab 沙盒自定义。
@@ -130,23 +132,27 @@ export function buildGameFromGroups(
     const entityIds: string[] = [];
     for (const item of group.items) {
       const size = sizes?.get(item.frontSpriteId);
-      prefabs.push({
-        id: `prefab-${entityN0 + n}`,
-        faces: { front: item.frontSpriteId, back: group.singleFace ? "" : item.backSpriteId },
-        ...(group.singleFace ? { singleFace: true } : {}),
-        ...(size ? { size } : {}),
-      });
+      const id = `prefab-${entityN0 + n}`;
+      const instId = `inst-${entityN0 + n}`;
+      if (group.kind === "token") {
+        prefabs.push({ kind: "token", id, faces: { front: item.frontSpriteId }, ...(size ? { size } : {}) });
+      } else if (group.kind === "board") {
+        prefabs.push({ kind: "board", id, faces: { front: item.frontSpriteId }, ...(size ? { size } : {}) });
+      } else {
+        prefabs.push({ kind: "card", id, faces: { front: item.frontSpriteId, back: item.backSpriteId }, ...(size ? { size } : {}) });
+      }
       entities.push({
-        id: `inst-${entityN0 + n}`,
-        prefabId: `prefab-${entityN0 + n}`,
-        faceUp: false,
+        id: instId,
+        prefabId: id,
+        kind: group.kind,
+        faceUp: group.kind === "card" ? false : true, // 卡牌默认背面朝上；token/board 默认正面
+        rotation: 0,
         x: 0,
         y: 0,
         zIndex: 0,
         ...(size ? { size } : {}), // 实例带尺寸（物理属性：不同尺寸不可堆叠）
-        ...(group.singleFace ? { singleFace: true } : {}), // 实例带单面标记（引擎禁翻面）
       });
-      entityIds.push(`inst-${entityN0 + n}`);
+      entityIds.push(instId);
       n++;
     }
     piles.push({ id: `pile-${pileN0 + gi}`, entityIds, x: 0, y: 0 });

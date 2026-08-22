@@ -20,17 +20,35 @@ interface EntityGroupBuilderProps {
   sprites: Sprite[];
   picker: Picker;
   selectedCount: number;
-  onAddGroup: () => void;
+  onAddGroup: (kind: EntityGroup["kind"]) => void; // 按类型新建组（卡牌/Token/版图）
   onAutoPair: () => void;
   onRemoveItem: (groupIdx: number, itemIdx: number) => void;
   onRemoveGroup: (groupIdx: number) => void;
   onSetPicker: (picker: Picker) => void;
-  onSameFaces: (groupIdx: number) => void; // 正反面一样（back = 各自正面图）
 }
+
+const KIND_LABEL: Record<EntityGroup["kind"], string> = {
+  card: "卡牌",
+  token: "Token",
+  board: "版图",
+};
+
+const KIND_TITLE: Record<EntityGroup["kind"], string> = {
+  card: "可翻 / 可叠 / 可洗牌",
+  token: "单面 / 禁翻 / 可叠",
+  board: "单面 / R 旋转 / 不可叠",
+};
+
+/** 新建按钮的说明（含背面流程提示） */
+const ADD_TITLE: Record<EntityGroup["kind"], string> = {
+  card: "新建卡牌组：随后选择背面（跳过 = 默认卡背）",
+  token: "新建 Token 组：单面无背面，直接完成",
+  board: "新建版图组：单面无背面，直接完成",
+};
 
 export default function EntityGroupBuilder({
   groups, sprites, picker, selectedCount,
-  onAddGroup, onAutoPair, onRemoveItem, onRemoveGroup, onSetPicker, onSameFaces,
+  onAddGroup, onAutoPair, onRemoveItem, onRemoveGroup, onSetPicker,
 }: EntityGroupBuilderProps) {
   const spriteUrl = (id: string): string | undefined => sprites.find((s) => s.id === id)?.url;
 
@@ -62,23 +80,29 @@ export default function EntityGroupBuilder({
         >
           自动正反交替组卡
         </button>
-        <button className="btn-pop text-sm" onClick={onAddGroup} disabled={selectedCount === 0}>
-          + 新建实体组（{selectedCount} 个）
-        </button>
+        <span className="text-xs text-secondary">已选 {selectedCount} 个</span>
+        <div className="flex items-center gap-1.5">
+          {(["card", "token", "board"] as const).map((k) => (
+            <button
+              key={k}
+              className="btn-pop text-xs"
+              onClick={() => onAddGroup(k)}
+              disabled={selectedCount === 0}
+              title={ADD_TITLE[k]}
+            >
+              + {KIND_LABEL[k]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {picker && (
         <div className="flex items-center gap-2 mb-2 px-2 py-1 bg-yellow-200/70 border-2 border-ink text-xs">
           <span>
             {picker.type === "back"
-              ? `为「实体组 ${picker.groupIdx + 1}」选择背面：点击图片池图片设为共用背面`
+              ? `为「卡牌组 ${picker.groupIdx + 1}」选择背面：点击图片池图片设为共用背面`
               : `替换「实体组 ${picker.groupIdx + 1}」第 ${picker.itemIdx + 1} 个的${picker.face === "front" ? "正面" : "背面"}：点击图片池图片`}
           </span>
-          {picker.type === "back" && (
-            <button className="link-pop text-[11px]" onClick={() => onSameFaces(picker.groupIdx)}>
-              正反面一样
-            </button>
-          )}
           {picker.type === "back" && (
             <button className="link-pop text-[11px]" onClick={() => onSetPicker(null)}>
               跳过（默认卡背）
@@ -104,7 +128,9 @@ export default function EntityGroupBuilder({
                 >
                   {collapsed.has(gi) ? "▸" : "▾"}
                 </button>
-                <span className="text-xs font-medium">实体组 {gi + 1}（{group.items.length} 个）</span>
+                <span className="text-xs font-medium" title={KIND_TITLE[group.kind]}>
+                  {KIND_LABEL[group.kind]}组 {gi + 1}（{group.items.length} 个）
+                </span>
               </div>
               <button className="link-pop text-[11px] text-red-500" onClick={() => onRemoveGroup(gi)}>
                 删除实体组
@@ -125,33 +151,32 @@ export default function EntityGroupBuilder({
                       <div className="w-full h-full bg-[#1e3a5f]" />
                     )}
                   </button>
-                  <button
-                    className={`relative w-10 h-14 border-2 overflow-hidden bg-[#1e3a5f] ${isPicking(gi, ii, "back") ? "animate-pulse border-red-500" : "border-transparent hover:border-secondary"}`}
-                    onClick={() => onSetPicker({ type: "replace", groupIdx: gi, itemIdx: ii, face: "back" })}
-                    title={group.singleFace ? "单面实体：背面固定为正面" : "点击替换背面"}
-                    disabled={group.singleFace}
-                  >
-                    {group.singleFace ? (
-                      // 单面组：背面 = 正面图（永远显示正面）
-                      spriteUrl(item.frontSpriteId) ? (
-                        <img src={spriteUrl(item.frontSpriteId)} alt="背面" className="w-full h-full object-contain" />
+                  {group.kind !== "card" ? (
+                    // Token/版图：单面，无背面
+                    <div className="w-10 h-14 border-2 border-transparent bg-[#1e3a5f] flex items-center justify-center">
+                      <span className="text-[9px] text-white/70">单面</span>
+                    </div>
+                  ) : (
+                    <button
+                      className={`relative w-10 h-14 border-2 overflow-hidden bg-[#1e3a5f] ${isPicking(gi, ii, "back") ? "animate-pulse border-red-500" : "border-transparent hover:border-secondary"}`}
+                      onClick={() => onSetPicker({ type: "replace", groupIdx: gi, itemIdx: ii, face: "back" })}
+                      title="点击替换背面"
+                    >
+                      {item.backSpriteId ? (
+                        spriteUrl(item.backSpriteId) ? (
+                          <img src={spriteUrl(item.backSpriteId)} alt="背面" className="w-full h-full object-contain" />
+                        ) : (
+                          <div className="w-full h-full bg-[#1e3a5f]" />
+                        )
                       ) : (
-                        <div className="w-full h-full bg-[#1e3a5f]" />
-                      )
-                    ) : item.backSpriteId ? (
-                      spriteUrl(item.backSpriteId) ? (
-                        <img src={spriteUrl(item.backSpriteId)} alt="背面" className="w-full h-full object-contain" />
-                      ) : (
-                        <div className="w-full h-full bg-[#1e3a5f]" />
-                      )
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <CardBack />
-                      </div>
-                    )}
-                  </button>
+                        <div className="w-full h-full flex items-center justify-center">
+                          <CardBack />
+                        </div>
+                      )}
+                    </button>
+                  )}
                   <span className="text-[10px] font-mono text-secondary flex-1">
-                    {item.frontSpriteId} / {group.singleFace ? "单面" : item.backSpriteId || "默认卡背"}
+                    {item.frontSpriteId} / {group.kind === "card" ? item.backSpriteId || "默认卡背" : "单面"}
                   </span>
                   <button className="link-pop text-[11px] text-red-500" onClick={() => onRemoveItem(gi, ii)}>
                     ✕

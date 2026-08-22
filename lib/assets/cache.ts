@@ -27,16 +27,20 @@ export class AssetLibrary {
   }
 
   /**
-   * 便捷：prefab → [正面url, 背面url]。
+   * 便捷：prefab → [正面url, 背面url]（按 kind）。
    * prefab 或正面 sprite 缺失 → undefined（渲染回退默认样式）；
-   * 背面缺失 → 空串（渲染回退默认卡背）。
+   * token/board 单面 → 背面恒空（渲染恒正面）；card 背面缺失 → 空串（渲染回退默认卡背）。
    */
   getPrefabFaces(prefabId: string): [string, string] | undefined {
     const prefab = this.prefabs.get(prefabId);
     if (!prefab) return undefined;
     const front = this.sprites.get(prefab.faces.front);
     if (!front) return undefined;
-    return [front.url, this.sprites.get(prefab.faces.back)?.url ?? ""];
+    if (prefab.kind === "card") {
+      const backId = prefab.faces.back ?? "";
+      return [front.url, backId ? (this.sprites.get(backId)?.url ?? "") : ""];
+    }
+    return [front.url, ""]; // token/board 单面
   }
 
   /** 渲染尺寸（缺省 120×168 卡牌） */

@@ -25,10 +25,9 @@ export default function Card({ card, children, draggable = false }: CardProps) {
 
   const faceClass = card.faceUp ? "bg-white text-black" : "bg-[#1e3a5f] text-white";
   // 一级查表：prefabId → [正面, 背面]（进房时一次性入缓存）
-  // 单面实体：禁用翻面（引擎 flipCard 忽略），faceUp 恒 false → 显式按单面显示正面
+  // kind 决定面选择：token/board 单面恒正面（禁翻）；card 按 faceUp
   const faces = getPrefabFaces(card.prefabId);
-  const singleFace = card.singleFace ?? false;
-  const showFront = card.faceUp || singleFace;
+  const showFront = card.kind !== "card" || card.faceUp;
   const frontSrc = showFront ? faces?.[0] : undefined;
   const backSrc = card.faceUp ? undefined : faces?.[1];
   const shadowClass = isDragging
@@ -41,7 +40,14 @@ export default function Card({ card, children, draggable = false }: CardProps) {
   const cardStyle: React.CSSProperties = {
     width: getPrefabSize(card.prefabId)?.width ?? 120,
     height: getPrefabSize(card.prefabId)?.height ?? 168,
-    transform: [isDragging ? "scale(1.05)" : "scale(1)", dragTransform].filter(Boolean).join(" "),
+    // 版图旋转只影响渲染（碰撞盒用未旋转尺寸）；translate 在 rotate 前 → 拖拽方向不受旋转影响
+    transform: [
+      isDragging ? "scale(1.05)" : "scale(1)",
+      dragTransform,
+      card.kind === "board" && card.rotation ? `rotate(${card.rotation}deg)` : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
   };
 
   return (
@@ -55,7 +61,7 @@ export default function Card({ card, children, draggable = false }: CardProps) {
       style={cardStyle}
       {...hoverProps}
     >
-      {/* 渲染：正面（faceUp 或单面）→ 背面 → 默认卡背 */}
+      {/* 渲染：正面（token 恒正面 / faceUp）→ 背面 → 默认卡背 */}
       {showFront ? (
         frontSrc ? (
           <img src={frontSrc} alt="" className="w-full h-full object-cover" />

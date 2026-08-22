@@ -2,7 +2,7 @@
  * 引擎类型 — 三层结构（资源 / 模板 / 实例）
  * - 资源层（静态）：Sprite（纯图）+ Prefab（模板，faces 引用 sprite），进房时一次性下发，永不参与状态同步
  * - 状态层（动态）：EntityState（实例，引用 prefab），随 state_sync 高频同步
- * - 渲染：getPrefabFaces(entity.prefabId) → [正面url, 背面url] → faceUp ? [0] : [1]
+ * - 渲染：按 prefabId 查 faces（getPrefabFaces）+ kind 决定面选择（token 恒正面）/ 旋转（board）
  */
 
 /** 纯图片资源，无任何业务语义 */
@@ -11,16 +11,25 @@ export interface Sprite {
   url: string;  // dataURL
 }
 
-/** 实体模板（预制体）：完整定义，自带全部面。引擎式 Prefab，无 kind（类型由内容决定） */
-export interface Prefab {
-  id: string;          // "prefab-c0"（游戏内唯一）
-  faces: {
-    front: string;     // 正面 sprite id
-    back: string;      // 背面 sprite id（空串 = 无背面，渲染回退默认卡背）
-  };
-  singleFace?: boolean; // 单面实体（正反面一样）：永远显示正面，F 翻面无效果
-  size?: { width: number; height: number }; // 渲染尺寸（桌面 px），缺省 120×168 卡牌
-}
+/** 旋转角度（度，顺时针） */
+export type Rotation = 0 | 90 | 180 | 270;
+
+/** 实体类型判别：kind 决定能力与 faces 结构，前端按 kind 区别对待 */
+export type EntityKind = "card" | "token" | "board";
+
+/** 渲染尺寸（桌面 px） */
+export type Size = { width: number; height: number };
+
+/**
+ * 实体模板（预制体）：判别联合。kind 决定 faces 结构与能力；模板不承担行为字段（无 stackable/singleFace）。
+ * - card：可翻（F）、可叠、可洗牌；back 空串 = 渲染回退默认卡背
+ * - token：单面（渲染恒正面、禁翻）；可叠
+ * - board：单面（渲染恒正面、禁翻）、可旋转（R 顺时针 90°）、不可叠（placeAt 跳过建堆）、不可入手牌
+ */
+export type Prefab =
+  | { kind: "card"; id: string; faces: { front: string; back: string }; size?: Size }
+  | { kind: "token"; id: string; faces: { front: string }; size?: Size }
+  | { kind: "board"; id: string; faces: { front: string }; size?: Size };
 
 /** 桌游资产集合：纯美术资源（图片表 + 模板表） */
 export interface GameAssets {
@@ -29,22 +38,25 @@ export interface GameAssets {
 }
 
 /**
- * 实例（场上实体）：纯逻辑状态，引用 prefab，不含任何资源引用。
- * 渲染：getPrefabFaces(entity.prefabId) → faceUp ? 正面 : 背面
+ * 实例（场上实体）：kind 判别 + 公共状态字段（faceUp/rotation 带默认值，识别代价低）。
+ * - faceUp：仅 card 有效（翻面）；token/board 单面恒正面（渲染按 kind 忽略，flip 按 kind 拦截）
+ * - rotation：仅 board 可旋转（客户端按 kind 限制）；渲染 CSS transform，碰撞盒用未旋转尺寸
+ * 渲染：getPrefabFaces(entity.prefabId) → [正面url, 背面url] → kind + faceUp 决定显示哪面
  */
 export interface EntityState {
   id: string;         // 实例 id "inst-0"（与 GameState.entities[].id 对应）
   prefabId: string;   // 引用 Prefab.id
-  faceUp: boolean;
+  kind: EntityKind;   // 从 prefab 复制（构建/迁移时设置）
+  faceUp: boolean;    // 默认 false（卡牌背面朝上）；构建时 token/board 可给 true
+  rotation: Rotation; // 默认 0；仅 board 可旋转
   x: number;          // 自由像素坐标（桌面坐标系）
   y: number;
   zIndex: number;     // z 序，越大越靠上
-  size?: { width: number; height: number }; // 渲染尺寸（从 prefab 复制）；缺省 120×168 卡牌；不同尺寸不可堆叠
-  singleFace?: boolean; // 单面实体（从 prefab 复制）：禁用翻面（flipCard 直接忽略）
+  size?: Size;        // 渲染尺寸（从 prefab 复制）；缺省 120×168 卡牌；不同尺寸不可堆叠
 }
 
 export interface Pile {
-  id: string;          // 自动生成 "pile-{ts}"
+  id: string;          // 自动生成 "pile-{n}"
   entityIds: string[]; // 从下到上
   x: number;
   y: number;
@@ -88,4 +100,5 @@ export type GameAction =
   | { type: "move_pile"; pileId: string; x: number; y: number } // 整堆移动
   | { type: "move_to_hand"; cardId: string; seatId: string } // seatId 任意（沙盒）
   | { type: "flip_card"; cardId: string }
+  | { type: "rotate_entity"; entityId: string } // 顺时针旋转 90°（仅 board 生效）
   | { type: "shuffle_pile"; pileId: string };

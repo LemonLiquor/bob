@@ -35,6 +35,7 @@ interface CardActionProviderProps {
   children: ReactNode;
   onFlip: (cardId: string) => void;
   onDraw: (id: string) => void;      // id 为悬停牌 id：抓入手牌区（自由牌 / 牌堆顶牌均可）
+  onRotate?: (id: string) => void;   // R 键旋转悬停实体（仅 board 生效，GameBoard 按 kind 拦截）
   onDelete?: (id: string) => void;   // Lab 编辑：Delete 键删除悬停实体（可选，不进协议）
   onCopy?: (id: string) => void;     // Lab 编辑：Ctrl/Cmd+D 复制悬停实体（可选，不进协议）
   disabled?: boolean;
@@ -44,6 +45,7 @@ export default function CardActionProvider({
   children,
   onFlip,
   onDraw,
+  onRotate,
   onDelete,
   onCopy,
   disabled = false,
@@ -52,6 +54,7 @@ export default function CardActionProvider({
 
   const onFlipRef = useRef(onFlip);
   const onDrawRef = useRef(onDraw);
+  const onRotateRef = useRef(onRotate);
   const onDeleteRef = useRef(onDelete);
   const onCopyRef = useRef(onCopy);
   const disabledRef = useRef(disabled);
@@ -59,6 +62,7 @@ export default function CardActionProvider({
   useEffect(() => {
     onFlipRef.current = onFlip;
     onDrawRef.current = onDraw;
+    onRotateRef.current = onRotate;
     onDeleteRef.current = onDelete;
     onCopyRef.current = onCopy;
     disabledRef.current = disabled;
@@ -104,6 +108,7 @@ export default function CardActionProvider({
       }
       if (lower === "f") onFlipRef.current(id);
       if (lower === "d") onDrawRef.current(id);
+      if (lower === "r") onRotateRef.current?.(id);
       if (e.key === "Delete") onDeleteRef.current?.(id);
     };
 

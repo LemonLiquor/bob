@@ -1,4 +1,4 @@
-import type { EntityState, GameState, Pile } from "./types";
+import type { EntityState, GameState, Pile, Rotation } from "./types";
 import { CARD_WIDTH, CARD_HEIGHT, OVERLAP_DISTANCE, TABLE_CENTER } from "./layout";
 
 // ============================================================
@@ -125,10 +125,10 @@ function placeAt(state: GameState, cardId: string, x: number, y: number): GameSt
   if (!card) return state;
   const target = findOverlap(state, x, y, cardId);
 
-  // 重叠 pile → 尺寸相同才入堆
+  // 重叠 pile → 目标牌是版图或尺寸不同 → 不入堆（版图不可叠，自由放置）
   if (target.pile) {
     const pileCard = state.entities.find((e) => e.id === target.pile!.entityIds[0]);
-    if (pileCard && sameSize(pileCard, card)) {
+    if (card.kind !== "board" && pileCard && pileCard.kind !== "board" && sameSize(pileCard, card)) {
       return {
         ...state,
         piles: state.piles.map((p) =>
@@ -138,9 +138,9 @@ function placeAt(state: GameState, cardId: string, x: number, y: number): GameSt
     }
   }
 
-  // 重叠自由牌 → 尺寸相同才自动建堆
+  // 重叠自由牌 → 任一方是版图或尺寸不同 → 不自动建堆
   if (target.card) {
-    if (sameSize(target.card, card)) {
+    if (card.kind !== "board" && target.card.kind !== "board" && sameSize(target.card, card)) {
       const pile: Pile = {
         id: `pile-${Date.now()}`,
         entityIds: [target.card.id, cardId],
@@ -170,11 +170,12 @@ export function moveCard(state: GameState, cardId: string, x: number, y: number)
   return placeAt(removed, cardId, x, y);
 }
 
-/** 牌加入指定座位的手牌区末尾。seatId 任意（沙盒允许塞进任何座位） */
+/** 牌加入指定座位的手牌区末尾。seatId 任意（沙盒允许塞进任何座位）。版图不可入手牌 */
 export function moveCardToHand(state: GameState, cardId: string, seatId: string): GameState {
   const card = findCard(state, cardId);
   const seat = state.seats.find((s) => s.id === seatId);
   if (!card || !seat) return state;
+  if (card.kind === "board") return state; // 版图不入手牌区
 
   const removed = removeCard(state, cardId);
   return {
@@ -245,18 +246,38 @@ export function movePile(state: GameState, pileId: string, x: number, y: number)
   };
 }
 
-/** 翻转指定卡牌的朝向。单面实体不可翻（直接忽略）。不可变更新 */
+/** 翻转指定实体的朝向。Token/版图单面禁翻（渲染恒正面，直接忽略）。不可变更新 */
 export function flipCard(state: GameState, cardId: string): GameState {
   const cardIndex = state.entities.findIndex((e) => e.id === cardId);
   if (cardIndex === -1) return state;
   const card = state.entities[cardIndex];
-  if (card.singleFace) return state; // 单面实体禁用翻面
+  if (card.kind !== "card") return state; // 仅卡牌可翻（token/board 单面）
   return {
     ...state,
     entities: [
       ...state.entities.slice(0, cardIndex),
       { ...card, faceUp: !card.faceUp },
       ...state.entities.slice(cardIndex + 1),
+    ],
+  };
+}
+
+/**
+ * 顺时针旋转 90°（仅版图生效；卡牌/Token 忽略）。不可变更新。
+ * 旋转只影响渲染（CSS transform），碰撞盒/叠放判定用未旋转尺寸。
+ */
+export function rotateEntity(state: GameState, entityId: string): GameState {
+  const index = state.entities.findIndex((e) => e.id === entityId);
+  if (index === -1) return state;
+  const entity = state.entities[index];
+  if (entity.kind !== "board") return state; // 仅版图可旋转
+  const next = ((entity.rotation + 90) % 360) as Rotation;
+  return {
+    ...state,
+    entities: [
+      ...state.entities.slice(0, index),
+      { ...entity, rotation: next },
+      ...state.entities.slice(index + 1),
     ],
   };
 }
