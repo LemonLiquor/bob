@@ -225,10 +225,6 @@ export default function LabPage() {
     // (game) 布局已提供 h-screen 高度，GameBoard 的 h-full 直接填满（无 nav，视口坐标 = 桌面坐标）
     <>
       <GameBoard gameState={labState} onAction={handleLabAction} labMode onLabDelete={handleDelete} onLabCopy={handleCopy} />
-      {/* 返回广场（lab 无 nav，需独立出口） */}
-      <button className="btn-ghost fixed bottom-3 left-3 z-50 text-xs" onClick={() => router.push("/games")}>
-        ← 广场
-      </button>
       {/* 空态提示（不挡交互） */}
       {empty && (
         <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-40">
@@ -243,15 +239,20 @@ export default function LabPage() {
           {error}
         </p>
       )}
-      {/* 草稿恢复提示（右上角） */}
-      {restored && (
-        <div className="fixed top-3 right-3 z-50 flex items-center gap-2 bg-card border-2 border-ink px-3 py-1.5">
-          <span className="text-[11px] text-muted">草稿已恢复</span>
-          <button className="link-pop text-[11px]" onClick={handleDiscardDraft}>
-            丢弃
-          </button>
-        </div>
-      )}
+      {/* 右上角：草稿恢复提示 + 返回广场 */}
+      <div className="fixed top-3 right-3 z-50 flex items-center gap-2">
+        {restored && (
+          <div className="flex items-center gap-2 bg-card border-2 border-ink px-3 py-1.5">
+            <span className="text-[11px] text-muted">草稿已恢复</span>
+            <button className="link-pop text-[11px]" onClick={handleDiscardDraft}>
+              丢弃
+            </button>
+          </div>
+        )}
+        <button className="btn-ghost text-xs" onClick={() => router.push("/games")}>
+          ← 广场
+        </button>
+      </div>
       {/* 浮动控件：保存（indexDB 草稿）+ 上传（发布）+ 导入入口 */}
       <div className="fixed bottom-3 right-3 z-50 flex items-center gap-2">
         <button className="btn-ghost text-xs" onClick={handleSave} disabled={empty}>

@@ -37,18 +37,29 @@ export default function Card({ card, children, draggable = false }: CardProps) {
     ? "transition-shadow duration-150"
     : "transition-[box-shadow,background-color,color] duration-150";
 
+  // 版图渲染：size 保持原始；有效尺寸（容器）按 rotation 分支——90/270 宽高互换，
+  // 图保持原始方向居中 + rotate，旋转后恰好填满容器。视觉包围盒 = 有效尺寸 = 引擎坐标，拖拽零换算。
+  const base = getPrefabSize(card.prefabId) ?? { width: 120, height: 168 };
+  const boardRotated = card.kind === "board" && (card.rotation === 90 || card.rotation === 270);
+  const cw = boardRotated ? base.height : base.width;
+  const ch = boardRotated ? base.width : base.height;
+  const imgW = boardRotated ? ch : cw; // = base.width（原始方向）
+  const imgH = boardRotated ? cw : ch; // = base.height
+
   const cardStyle: React.CSSProperties = {
-    width: getPrefabSize(card.prefabId)?.width ?? 120,
-    height: getPrefabSize(card.prefabId)?.height ?? 168,
-    // 版图旋转只影响渲染（碰撞盒用未旋转尺寸）；translate 在 rotate 前 → 拖拽方向不受旋转影响
-    transform: [
-      isDragging ? "scale(1.05)" : "scale(1)",
-      dragTransform,
-      card.kind === "board" && card.rotation ? `rotate(${card.rotation}deg)` : "",
-    ]
-      .filter(Boolean)
-      .join(" "),
+    width: cw,
+    height: ch,
+    // 版图旋转不转容器（容器 = 有效尺寸）；图在容器内居中旋转
+    transform: [isDragging ? "scale(1.05)" : "scale(1)", dragTransform].filter(Boolean).join(" "),
   };
+  const rotStyle: React.CSSProperties = {
+    width: imgW,
+    height: imgH,
+    left: boardRotated ? (cw - imgW) / 2 : 0,
+    top: boardRotated ? (ch - imgH) / 2 : 0,
+    transform: card.rotation ? `rotate(${card.rotation}deg)` : undefined,
+  };
+
 
   return (
     <div
@@ -61,8 +72,15 @@ export default function Card({ card, children, draggable = false }: CardProps) {
       style={cardStyle}
       {...hoverProps}
     >
-      {/* 渲染：正面（token 恒正面 / faceUp）→ 背面 → 默认卡背 */}
-      {showFront ? (
+      {/* 渲染：版图（图居中旋转，填满容器）→ 正面（token 恒正面 / faceUp）→ 背面 → 默认卡背 */}
+      {card.kind === "board" && frontSrc ? (
+        <img
+          src={frontSrc}
+          alt=""
+          className="absolute object-contain"
+          style={rotStyle}
+        />
+      ) : showFront ? (
         frontSrc ? (
           <img src={frontSrc} alt="" className="w-full h-full object-cover" />
         ) : (

@@ -264,7 +264,7 @@ export function flipCard(state: GameState, cardId: string): GameState {
 
 /**
  * 顺时针旋转 90°（仅版图生效；卡牌/Token 忽略）。不可变更新。
- * 旋转只影响渲染（CSS transform），碰撞盒/叠放判定用未旋转尺寸。
+ * 只改 rotation；尺寸保持原始（渲染/计算处按 rotation 分支取有效尺寸，见 Card 的 boardRotated）。
  */
 export function rotateEntity(state: GameState, entityId: string): GameState {
   const index = state.entities.findIndex((e) => e.id === entityId);

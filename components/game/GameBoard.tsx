@@ -177,7 +177,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
       return;
     }
 
-    // 牌堆：对齐 pile 中心
+    // 牌堆：对齐 pile 中心（版图不入堆 → 自由放置到 pile 位置）
     if (overId && overId.startsWith("pile-") && !overId.startsWith("pile-move-")) {
       const pile = gameState.piles.find((p) => p.id === overId);
       if (pile) {
@@ -186,8 +186,8 @@ export default function GameBoard({ gameState: propState, onAction, initialState
       }
     }
 
-    // 桌面：落点 = 拖拽中真实位置（translated，含 transform，与视觉一致）
-    // （游戏页全屏布局下 main 左上角 = 视口 (0,0)，视口坐标 = 桌面坐标，无需换算）
+    // 桌面：落点 = 拖拽中真实位置（translated，含 transform，与视觉一致）。
+    // 版图旋转 = 引擎几何（size 已 swap），包围盒恒等于引擎坐标 → 零换算直接落点。
     const x = translated.left;
     const y = translated.top;
     // 防误触：几乎没移动则不处理
