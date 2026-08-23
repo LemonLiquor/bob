@@ -122,8 +122,8 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
   >(null);
   const [placeRect, setPlaceRect] = useState({ x: 0, y: 0, w: 0, h: 0 }); // 画布像素坐标
   const dragRef = useRef<{ sx: number; sy: number; rx: number; ry: number } | null>(null);
-  const emojiPreviewRef = useRef<HTMLDivElement>(null);
-  const imgPreviewRef = useRef<HTMLImageElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null); // 预览外层（虚线框 + wheel 监听）
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null); // 预览画布（与最终渲染同一绘制代码）
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const lastRef = useRef<{ x: number; y: number } | null>(null);
@@ -404,7 +404,7 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("keydown", onKey);
-    const el = placing.type === "emoji" ? emojiPreviewRef.current : imgPreviewRef.current;
+    const el = previewRef.current;
     el?.addEventListener("wheel", onWheel, { passive: false });
     return () => {
       window.removeEventListener("pointermove", onMove);
@@ -413,6 +413,23 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
       el?.removeEventListener("wheel", onWheel);
     };
   }, [placing, size, cssK, cancelPlace]);
+
+  // 预览重绘：与最终渲染同一绘制代码（fillText/drawImage 同参数）→ 预览 = 渲染的精确预览，零偏移
+  useEffect(() => {
+    const c = previewCanvasRef.current;
+    if (!c || !placing) return;
+    c.width = Math.max(1, Math.round(placeRect.w));
+    c.height = Math.max(1, Math.round(placeRect.h));
+    const ctx = c.getContext("2d")!;
+    if (placing.type === "emoji") {
+      ctx.font = `${c.height}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(placing.text, c.width / 2, c.height / 2);
+    } else {
+      ctx.drawImage(placing.img, 0, 0, c.width, c.height);
+    }
+  }, [placing, placeRect]);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
@@ -504,40 +521,22 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
                 cursor: fillMode ? "pointer" : "crosshair",
               }}
             />
-            {placing &&
-              (placing.type === "emoji" ? (
-                <div
-                  ref={emojiPreviewRef}
-                  onPointerDown={startDrag}
-                  className="absolute opacity-75 border-2 border-dashed border-ink cursor-move select-none z-10 flex items-center justify-center"
-                  style={{
-                    left: placeRect.x / cssK,
-                    top: placeRect.y / cssK,
-                    width: placeRect.w / cssK,
-                    height: placeRect.h / cssK,
-                    fontSize: placeRect.h / cssK,
-                    lineHeight: 1,
-                    textAlign: "center",
-                  }}
-                >
-                  {placing.text}
-                </div>
-              ) : (
-                <img
-                  ref={imgPreviewRef}
-                  src={placing.img.src}
-                  alt=""
-                  onPointerDown={startDrag}
-                  draggable={false}
-                  className="absolute opacity-75 border-2 border-dashed border-ink cursor-move z-10"
-                  style={{
-                    left: placeRect.x / cssK,
-                    top: placeRect.y / cssK,
-                    width: placeRect.w / cssK,
-                    height: placeRect.h / cssK,
-                  }}
-                />
-              ))}
+            {/* 预览层：外层虚线框（outline 不占盒空间）+ canvas（与最终渲染同一绘制代码，零偏移） */}
+            {placing && (
+              <div
+                ref={previewRef}
+                onPointerDown={startDrag}
+                className="absolute opacity-75 outline-2 outline-dashed outline-ink cursor-move z-10"
+                style={{
+                  left: placeRect.x / cssK,
+                  top: placeRect.y / cssK,
+                  width: placeRect.w / cssK,
+                  height: placeRect.h / cssK,
+                }}
+              >
+                <canvas ref={previewCanvasRef} className="w-full h-full" />
+              </div>
+            )}
           </div>
         </div>
         </div>

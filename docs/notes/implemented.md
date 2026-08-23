@@ -55,6 +55,7 @@
 - **在线图片扩展点**：复用文本输入框（URL → Image 加载，需 CORS 处理防 canvas 污染），本次不做
 - **画布像素 ↔ CSS 显示换算（cssK）**：预览层/拖动用 `cssK = SCALE × size.height / DISPLAY_H`（画布像素 × cssK = CSS px），**不能用 1/SCALE**——显示尺寸（DISPLAY_H=320）与分辨率（size×SCALE）独立；曾误用 ÷SCALE 导致预览只有实际 1/4、拖动 ×SCALE 放大 4 倍飞出去、拖飞后放置内容在画布外
 - **预览与绘制位置对齐**：canvas 的 border 移到画布容器（canvas 无 border）——border-box 下 canvas 内容区缩进 border 宽度，预览坐标相对容器原点会整体偏移 border px；图片 objectURL 延迟到放置/取消后才 revoke（预览 `<img>` 依赖它）
+- **预览 = 渲染同一绘制代码**：emoji div/img 预览与 canvas 渲染是两套代码，emoji 字体基线行为不同导致垂直偏移；改为预览层 = 外层虚线框（outline 不占盒空间）+ 内层 canvas，重绘 effect 用与 confirmPlace 完全相同的 fillText/drawImage 参数 → 预览即渲染的精确预览，零偏移
 - **放置模式 clamp**：拖动限制贴纸中心在画布内（防拖飞后放置不可见）；kind 切换画布重建时取消未放置的贴纸
 
 **否决了什么**：
