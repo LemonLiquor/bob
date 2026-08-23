@@ -6,7 +6,7 @@ import type { EntityKind, Size } from "@/lib/engine/types";
 // ============================================================
 // DrawEntityModal — 手绘桌游实体弹窗
 // - 画布透明背景（形状由笔画像素承载，复用"形状在取图时定"机制，无 shape 字段）
-// - 像素分辨率 = 导出尺寸 × 3（笔触视觉比例 / dataURL 体积的平衡点）
+// - 像素分辨率 = 导出尺寸 × 4（几何锯齿 + 线条实心像素支撑）
 // - 尺寸输入比例锁定（改宽 → 高按当前比例跟随；画布等比缩放保留内容，防拉伸）
 // - kind 决定能力（card 默认卡背 / token 单面可叠 / board 可旋转）
 // ============================================================
@@ -18,10 +18,11 @@ const KIND_PRESETS: Record<EntityKind, { size: Size; label: string }> = {
 };
 
 const COLORS = ["#1a1a1a", "#e63946", "#457b9d", "#2e7d32", "#f2c200", "#ffffff"];
-const BRUSH_SIZES = [1, 3, 6];
-const SCALE = 3; // 像素分辨率 = 导出尺寸 × 3（填色边缘平滑度与 dataURL 体积的平衡）
+const BRUSH_SIZES = [1, 2, 4]; // 视觉（桌面）像素；画布实际 = 视觉 × SCALE（整数，避免 AA 不对称）
+const SCALE = 4; // 像素分辨率 = 导出尺寸 × 4
 const UNDO_LIMIT = 20;
-const FILL_TOLERANCE = 32; // 填色匹配容差（抗锯齿边缘像素也在容差内）
+const FILL_TOLERANCE = 32; // 填色匹配容差
+const FILL_ALPHA_THRESHOLD = 96; // 填色：alpha ≤ 阈值视为空白（把笔画 AA 边缘补成填充色，不留毛边）
 const DISPLAY_H = 320; // 画布显示高度（CSS px），宽按比例
 const SIZE_MIN = 16;
 const SIZE_MAX = 480;
@@ -58,10 +59,12 @@ function floodFill(
     return 0;
   }
   const match = (i: number) =>
-    Math.abs(data[i] - tr) <= tolerance &&
-    Math.abs(data[i + 1] - tg) <= tolerance &&
-    Math.abs(data[i + 2] - tb) <= tolerance &&
-    Math.abs(data[i + 3] - ta) <= tolerance;
+    // 半透明边缘（笔画 AA）视为空白：填色时补齐，边缘不留渐变残留
+    data[i + 3] <= FILL_ALPHA_THRESHOLD ||
+    (Math.abs(data[i] - tr) <= tolerance &&
+      Math.abs(data[i + 1] - tg) <= tolerance &&
+      Math.abs(data[i + 2] - tb) <= tolerance &&
+      Math.abs(data[i + 3] - ta) <= tolerance);
   let changed = 0;
   const visited = new Uint8Array(width * height);
   const stack: number[] = [x, y];
@@ -127,7 +130,7 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
     canvas.getContext("2d")!.clearRect(0, 0, canvas.width, canvas.height);
   }
 
-  /** 完成：导出透明 PNG（分辨率 = 尺寸 × 3） */
+  /** 完成：导出透明 PNG（分辨率 = 尺寸 × 4） */
   function handleDone() {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -185,7 +188,7 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
       const last = lastRef.current;
       if (!last) return;
       ctx.strokeStyle = color;
-      ctx.lineWidth = brush;
+      ctx.lineWidth = brush * SCALE; // 笔粗 = 视觉 px × SCALE（恒整数）
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.globalCompositeOperation = eraser ? "destination-out" : "source-over";
