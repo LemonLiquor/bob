@@ -6,7 +6,7 @@ import type { EntityKind, Size } from "@/lib/engine/types";
 // ============================================================
 // DrawEntityModal — 手绘桌游实体弹窗
 // - 画布透明背景（形状由笔画像素承载，复用"形状在取图时定"机制，无 shape 字段）
-// - 像素分辨率 = 导出尺寸 × 2（笔触视觉比例 / dataURL 体积的平衡点）
+// - 像素分辨率 = 导出尺寸 × 3（笔触视觉比例 / dataURL 体积的平衡点）
 // - 尺寸输入比例锁定（改宽 → 高按当前比例跟随；画布等比缩放保留内容，防拉伸）
 // - kind 决定能力（card 默认卡背 / token 单面可叠 / board 可旋转）
 // ============================================================
@@ -19,11 +19,71 @@ const KIND_PRESETS: Record<EntityKind, { size: Size; label: string }> = {
 
 const COLORS = ["#1a1a1a", "#e63946", "#457b9d", "#2e7d32", "#f2c200", "#ffffff"];
 const BRUSH_SIZES = [1, 3, 6];
-const SCALE = 2; // 像素分辨率 = 导出尺寸 × 2
+const SCALE = 3; // 像素分辨率 = 导出尺寸 × 3（填色边缘平滑度与 dataURL 体积的平衡）
 const UNDO_LIMIT = 20;
+const FILL_TOLERANCE = 32; // 填色匹配容差（抗锯齿边缘像素也在容差内）
 const DISPLAY_H = 320; // 画布显示高度（CSS px），宽按比例
 const SIZE_MIN = 16;
 const SIZE_MAX = 480;
+
+/** hex → rgba（填色用，alpha 恒 255 不透明） */
+function hexToRgba(hex: string) {
+  const n = parseInt(hex.slice(1), 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255, a: 255 };
+}
+
+/** 扫描线 flood fill（栈式 4-邻域，避免递归栈溢出）：匹配容差内像素替换为 fill 色，返回修改像素数 */
+function floodFill(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  fill: { r: number; g: number; b: number; a: number },
+  tolerance: number,
+): number {
+  const { width, height } = ctx.canvas;
+  const img = ctx.getImageData(0, 0, width, height);
+  const data = img.data;
+  const i0 = (y * width + x) * 4;
+  const tr = data[i0];
+  const tg = data[i0 + 1];
+  const tb = data[i0 + 2];
+  const ta = data[i0 + 3];
+  // 目标点已同色 → 无需填充
+  if (
+    Math.abs(tr - fill.r) <= tolerance &&
+    Math.abs(tg - fill.g) <= tolerance &&
+    Math.abs(tb - fill.b) <= tolerance &&
+    Math.abs(ta - fill.a) <= tolerance
+  ) {
+    return 0;
+  }
+  const match = (i: number) =>
+    Math.abs(data[i] - tr) <= tolerance &&
+    Math.abs(data[i + 1] - tg) <= tolerance &&
+    Math.abs(data[i + 2] - tb) <= tolerance &&
+    Math.abs(data[i + 3] - ta) <= tolerance;
+  let changed = 0;
+  const visited = new Uint8Array(width * height);
+  const stack: number[] = [x, y];
+  while (stack.length) {
+    const py = stack.pop()!;
+    const px = stack.pop()!;
+    if (px < 0 || px >= width || py < 0 || py >= height) continue;
+    const vi = py * width + px;
+    if (visited[vi]) continue;
+    visited[vi] = 1;
+    const i = vi * 4;
+    if (!match(i)) continue;
+    data[i] = fill.r;
+    data[i + 1] = fill.g;
+    data[i + 2] = fill.b;
+    data[i + 3] = fill.a;
+    changed++;
+    stack.push(px + 1, py, px - 1, py, px, py + 1, px, py - 1);
+  }
+  if (changed > 0) ctx.putImageData(img, 0, 0);
+  return changed;
+}
 
 interface DrawEntityModalProps {
   onClose: () => void;
@@ -36,6 +96,7 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
   const [color, setColor] = useState(COLORS[0]);
   const [brush, setBrush] = useState(BRUSH_SIZES[1]);
   const [eraser, setEraser] = useState(false);
+  const [fillMode, setFillMode] = useState(false); // 填色模式：点击即填充当前颜色
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const lastRef = useRef<{ x: number; y: number } | null>(null);
@@ -66,7 +127,7 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
     canvas.getContext("2d")!.clearRect(0, 0, canvas.width, canvas.height);
   }
 
-  /** 完成：导出透明 PNG（分辨率 = 尺寸 × 2） */
+  /** 完成：导出透明 PNG（分辨率 = 尺寸 × 3） */
   function handleDone() {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -106,8 +167,14 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
     };
     const onDown = (e: PointerEvent) => {
       e.preventDefault();
-      drawingRef.current = true;
       const p = toCanvas(e);
+      // 填色模式：点击填充（实际修改了像素才压栈），不进入画笔拖拽
+      if (fillMode) {
+        const changed = floodFill(ctx, Math.floor(p.x), Math.floor(p.y), hexToRgba(color), FILL_TOLERANCE);
+        if (changed > 0) pushUndo();
+        return;
+      }
+      drawingRef.current = true;
       lastRef.current = p;
       ctx.beginPath();
       ctx.moveTo(p.x, p.y);
@@ -142,7 +209,7 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, [color, brush, eraser]);
+  }, [color, brush, eraser, fillMode]);
 
   return (
     <div
@@ -207,11 +274,12 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
         <div className="flex justify-center mb-3">
           <canvas
             ref={canvasRef}
-            className="border-2 border-ink cursor-crosshair touch-none"
+            className="border-2 border-ink touch-none"
             style={{
               width: DISPLAY_H * (size.width / size.height),
               height: DISPLAY_H,
               background: "var(--surface)",
+              cursor: fillMode ? "pointer" : "crosshair",
             }}
           />
         </div>
@@ -223,12 +291,13 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
               <button
                 key={c}
                 className={`w-6 h-6 rounded-full border-2 cursor-pointer transition-transform ${
-                  color === c && !eraser ? "border-ink scale-110" : "border-ink/30 hover:border-ink"
+                  color === c && !eraser && !fillMode ? "border-ink scale-110" : "border-ink/30 hover:border-ink"
                 }`}
                 style={{ background: c }}
                 onClick={() => {
                   setColor(c);
                   setEraser(false);
+                  setFillMode(false);
                 }}
               />
             ))}
@@ -238,11 +307,12 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
               <button
                 key={b}
                 className={`w-8 h-8 border-2 flex items-center justify-center cursor-pointer ${
-                  brush === b && !eraser ? "border-ink bg-ink/10" : "border-ink/30 hover:border-ink"
+                  brush === b && !eraser && !fillMode ? "border-ink bg-ink/10" : "border-ink/30 hover:border-ink"
                 }`}
                 onClick={() => {
                   setBrush(b);
                   setEraser(false);
+                  setFillMode(false);
                 }}
               >
                 <span className="rounded-full" style={{ width: b * 3, height: b * 3, background: "#1a1a1a" }} />
@@ -253,9 +323,23 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
             className={`text-xs px-3 py-1.5 border-2 cursor-pointer ${
               eraser ? "bg-ink text-surface border-ink" : "border-ink/40 hover:border-ink"
             }`}
-            onClick={() => setEraser((v) => !v)}
+            onClick={() => {
+              setEraser((v) => !v);
+              setFillMode(false);
+            }}
           >
             橡皮
+          </button>
+          <button
+            className={`text-xs px-3 py-1.5 border-2 cursor-pointer ${
+              fillMode ? "bg-ink text-surface border-ink" : "border-ink/40 hover:border-ink"
+            }`}
+            onClick={() => {
+              setFillMode((v) => !v);
+              setEraser(false);
+            }}
+          >
+            填色
           </button>
           <button className="text-xs px-3 py-1.5 border-2 border-ink/40 hover:border-ink cursor-pointer" onClick={undo}>
             撤销

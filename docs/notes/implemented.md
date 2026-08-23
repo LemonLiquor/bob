@@ -11,11 +11,11 @@
 **决定了什么**：
 
 - **形状零新字段**：画布透明背景导出透明 PNG，复用"形状在取图时定"机制（渲染层矩形 + 透明图，无 shape 字段）；不需要 toCircular
-- **像素分辨率 = 导出尺寸 × 2**：笔触粗细有视觉意义（1/3/6px 档位在 2x 下 = 0.5/1.5/3px），dataURL 体积可控（assets 进房一次性下发）；非固定分辨率
+- **像素分辨率 = 导出尺寸 × 3**：笔触粗细有视觉意义（1/3/6px 档位在 3x 下 = 0.33/1/2px），填色边缘平滑，dataURL 体积可控（assets 进房一次性下发）；从 2x 提到 3x 是因为填色像素块感明显
 - **尺寸输入比例锁定**：宽/高数字框（默认按 kind：卡牌 120×168 / token 80×80 / 版图 240×240），改宽则高按当前比例跟随；画布重建时旧内容 drawImage 等比缩放保留（不变形不丢笔迹）；kind 切换则清空
 - **kind 三 tab**：card 背面空串 = 默认卡背；token 单面可叠；board 可旋转（方形画布与"碰撞盒用未旋转尺寸"无冲突）
 - **上桌**：sprite + prefab + 实例（网格空位摆位同 ImportFlow，z 置顶 maxZ+1）；card faceUp 默认 false（同 buildGameFromGroups）
-- **工具行**：6 色（Bauhaus 色板）/ 3 档笔粗 / 橡皮（destination-out）/ 撤销（ImageData 栈 20 步，清空可撤销）/ 清空；绘制 pointerdown + window move/up（拖出画布不断线）
+- **工具行**：6 色（Bauhaus 色板）/ 3 档笔粗 / 橡皮（destination-out）/ 填色（自实现扫描线 flood fill：栈式 4-邻域 + visited 去重，容差 32 匹配 RGBA 抗锯齿边缘，实际修改像素才压栈）/ 撤销（ImageData 栈 20 步，清空可撤销）/ 清空；绘制 pointerdown + window move/up（拖出画布不断线）；橡皮与填色互斥
 
 **否决了什么**：
 
