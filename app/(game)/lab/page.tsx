@@ -10,6 +10,7 @@ import { clearDraft, loadDraft, saveDraft } from "@/lib/storage/draft";
 import { send, onMessage } from "@/lib/multiplayer/transport";
 import type { ServerMessage } from "@/lib/multiplayer/protocol";
 import GameBoard from "@/components/game/GameBoard";
+import LabEscMenu from "@/components/game/LabEscMenu";
 import ImportFlow from "@/components/import/ImportFlow";
 
 // ============================================================
@@ -241,7 +242,7 @@ export default function LabPage() {
       {empty && (
         <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-40">
           <p className="text-muted text-lg bg-card border-2 border-ink px-6 py-3">
-            空桌 —— 点 [导入 PDF] 开始，可反复导入多个 PDF 组装成一个桌游
+            空桌 —— 按 ESC 打开菜单，点 [导入 PDF] 开始，可反复导入多个 PDF 组装成一个桌游
           </p>
         </div>
       )}
@@ -251,32 +252,29 @@ export default function LabPage() {
           {error}
         </p>
       )}
-      {/* 右上角：草稿恢复提示 + 返回广场 */}
+      {/* 右上角：草稿恢复提示 + 返回广场（保留，菜单内另有一份） */}
       <div className="fixed top-3 right-3 z-50 flex items-center gap-2">
         {restored && (
           <div className="flex items-center gap-2 bg-card border-2 border-ink px-3 py-1.5">
             <span className="text-[11px] text-muted">草稿已恢复</span>
-            <button className="link-pop text-[11px]" onClick={handleDiscardDraft}>
-              丢弃
-            </button>
           </div>
         )}
         <button className="btn-ghost text-xs" onClick={() => router.push("/games")}>
           ← 广场
         </button>
       </div>
-      {/* 浮动控件：保存（indexDB 草稿）+ 上传（发布）+ 导入入口 */}
-      <div className="fixed bottom-3 right-3 z-50 flex items-center gap-2">
-        <button className="btn-ghost text-xs" onClick={handleSave} disabled={empty}>
-          保存
-        </button>
-        <button className="btn-pop text-xs" onClick={handleUpload} disabled={empty || uploading}>
-          {uploading ? "上传中..." : "上传"}
-        </button>
-        <button className="btn-pop text-xs" onClick={() => setImportOpen(true)}>
-          导入 PDF
-        </button>
-      </div>
+      {/* ESC 控制菜单（保存/上传/导入/丢弃草稿/退出，替换原浮动按钮组） */}
+      <LabEscMenu
+        empty={empty}
+        uploading={uploading}
+        restored={restored}
+        disabled={importOpen || uploadOpen}
+        onSave={handleSave}
+        onUpload={handleUpload}
+        onImport={() => setImportOpen(true)}
+        onDiscard={handleDiscardDraft}
+        onExit={() => router.push("/games")}
+      />
       {/* 上传确认弹窗：检查上传信息（桌游名可编辑 + 统计） */}
       {uploadOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
