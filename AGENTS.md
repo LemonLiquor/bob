@@ -42,8 +42,7 @@ BOB — Box of Boardgames（桌游沙盒）：网页桌游沙盒，上传 PDF �
 
 | 文档 | 内容 | 什么时候读 |
 |------|------|-----------|
-| `README.md` | 项目介绍、快速开始 | 第一次接触 |
+| `README.md` | 项目介绍、快速开始、Done/TODO 进度 | 第一次接触；规划需求时看 TODO |
 | `docs/architecture.md` | 架构地图：分层与关键机制 | 改代码前 |
 | `docs/practices.md` | 协作实践：讨论循环、角色方法 | 新 session 开始 |
 | `docs/notes/` | 决策记录（proposed / implemented / archived 目录 + rejected.md） | 做决策前，先查是否已有结论 |
-| `ROADMAP.md` | 方向：规划中的功能 | 规划需求时 |
