@@ -165,13 +165,17 @@ export function handleMessage(
 
     case "upload_game": {
       const now = Date.now();
-      gameLibrary.saveGame({
+      const ok = gameLibrary.saveGame({
         meta: parsed.meta,
         assets: parsed.assets,
         initialState: parsed.initialState,
         createdAt: now,
         updatedAt: now,
       });
+      if (!ok) {
+        send(ws, { type: "error", message: "桌游已存在，不允许覆盖——请重命名或另存为新桌游" });
+        return;
+      }
       send(ws, { type: "game_uploaded", gameId: parsed.meta.id });
       break;
     }

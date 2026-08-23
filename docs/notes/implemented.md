@@ -13,6 +13,7 @@
 - **坐标语义**：`EntityState.x/y` + `Pile.x/y` 在 parentId 非空时 = 相对父版图坐标；parentId 空 = 世界坐标（桌面坐标系）。`worldOf(state, e)` 沿 parentId 链上溯求和（环保护）
 - **归属写时机**（唯一引擎逻辑）：`placeAt` 落点（世界坐标）中心在版图世界矩形内（`findBoardAt`）→ 写 parentId + **坐标换算相对**；未命中 → 清 + 保持世界坐标；建堆继承落点归属（换算）；`movePile` 落点重判（换算）；`rotateEntity` 旋转后重判（脱离者换算回世界）；`removeEntity` 删版图子实体换算回世界；入堆/入手牌/掉牌清归属（坐标由下次 placeAt 重设）
 - **渲染层级**：`BoardContainer` 递归——版图 droppable（悬停高亮）+ 容器 + **跟随层**（版图拖动时与 Card 的 dnd transform 同步，子实体 DOM 父子跟随）+ 子实体（x/y 直接定位）+ 子堆 + 嵌套版图递归；拖拽中 `boardLifted` 容器置顶（不迁移 DOM，防卸载重挂）
+- **Pile 永不解散**（剩 1 张也保留：堆位置/归属承载剩余牌，防相对坐标错位）；**move 动作末尾 `pruneEmptyPiles` 清理空堆**（moveCard / moveCardToHand / moveCardToPile / removeEntity；空堆清理后放回原位置 = 自由放置，不重建）
 - **Pile 容器层级 = 堆内最高实体 z**：堆在版图上不被版图图面盖住
 - **兜底**：`assignParents` 幂等（GameBoard 非受控初始化 / 服务端 createRoom / Lab 导入草稿）——**跳过堆内实体与版图自身**（批量判定会互相包含成环，嵌套版图归属靠运行时放置写入）
 - **UI 位移状态**：`dragDelta`（onDragMove 累计，dragEnd/dragCancel 清零）
@@ -84,22 +85,23 @@
 - **形状/大小字段进引擎**：手绘形状由像素承载、尺寸复用现有 Size，引擎与协议零改动
 - **图层 / 重做（redo）**：当前不需要的抽象
 
-## Lab 导入现有桌游：复用 get_game 链路，上传幂等覆盖原桌游
+## Lab 导入现有桌游：复用 get_game 链路，上传永远保存为新桌游（不允许覆盖）
 
-- **日期**：2026-08-23（首次提出）
-- **主题**：lab 支持直接导入桌游库中的现有桌游，在其基础上修改后上传覆盖
+- **日期**：2026-08-23（首次提出；同日修订：覆盖语义 → 新建语义）
+- **主题**：lab 支持直接导入桌游库中的现有桌游，在其基础上修改后**上传为新桌游**（曾为幂等覆盖，误覆盖造成数据丢失后修订）
 
 **决定了什么**：
 
-- **零服务端/协议改动**：复用 `get_game` → `game_data`（assets + 无座 initialState）链路；`saveGame` 同 id 幂等覆盖天然支持"基础上修改"
+- **零服务端/协议改动**（导入链路）：复用 `get_game` → `game_data`（assets + 无座 initialState）
 - **入口**：ESC 菜单新增"导入桌游"按钮 → `ImportGameModal`（新组件：`list_games` 列表 + 两段确认"替换当前工作区"）
 - **导入 = 整体替换工作区**：`setName` + sprites/prefabs/labState 替换 + `setAssets`（同步先于渲染）+ 计数器 `nextSeq` 重置（防后续 id 碰撞）；`clearDraft` + `setRestored(false)`（旧草稿废弃）
-- **上传覆盖**：`gameIdRef` 沿用原 id，上传确认弹窗提示"将覆盖原桌游《name》"（`importedFrom` 标记）；失败提示复用 error 分支
+- **上传永不覆盖**：导入时 **`gameIdRef` 不沿用原 id**（保持 null）→ 上传/保存草稿时生成新 `pnp-{ts}` id；弹窗提示"将保存为新桌游（原《name》不受影响）"（`importedFrom` 标记仅作展示）
+- **服务端纵深防御**：`saveGame` 同 id 已存在 → 拒绝并返回 false（`upload_game` 回 error，客户端透传提示）；`server/data/` 被 gitignore，无备份，覆盖不可恢复
 - **弹窗互斥**：`importGameOpen` 加入 ESC 菜单 disabled
 
 **否决了什么**：
 
-- **导入生成新桌游副本**：默认覆盖原 id，不产生重复项
+- **上传幂等覆盖原桌游**：误覆盖即永久丢失（文件直接 writeFileSync、无备份、gitignore），改为永远新建
 - **保留旧草稿**：导入即替换，避免下次进 lab 恢复出旧工作区造成困惑
 
 ## Lab ESC 控制菜单：功能按键收拢，退出保留并复制

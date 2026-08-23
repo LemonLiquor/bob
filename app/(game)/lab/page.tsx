@@ -47,6 +47,8 @@ function nextSeq(ids: string[]): number {
   return ids.reduce((max, id) => Math.max(max, seqOf(id)), -1) + 1;
 }
 
+
+
 export default function LabPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [importGameOpen, setImportGameOpen] = useState(false); // 导入现有桌游弹窗
@@ -69,13 +71,13 @@ export default function LabPage() {
   const [importedFrom, setImportedFrom] = useState<{ id: string; name: string } | null>(null); // 导入模式标记（上传弹窗提示覆盖）
   const router = useRouter();
 
-  /** 导入现有桌游：整体替换工作区（清旧草稿；gameId 沿用原 id → 上传覆盖原桌游） */
+  /** 导入现有桌游：整体替换工作区（清旧草稿；**不沿用原 id**——上传永远保存为新桌游，不允许覆盖） */
   function importGame(gameId: string, name: string, assets: GameAssets, initialState: GameState) {
     void clearDraft(); // 旧草稿废弃（导入 = 工作区整体替换）
     setRestored(false);
     setImportedFrom({ id: gameId, name });
     setName(name);
-    gameIdRef.current = gameId;
+    // gameIdRef 保持 null：上传/保存时生成新 id（pnp-{ts}），原桌游永不被覆盖
     setSprites(assets.sprites);
     setPrefabs(assets.prefabs);
     setAssets(assets); // 渲染必需（同步先于渲染）
@@ -102,7 +104,7 @@ export default function LabPage() {
         if (pendingGameIdRef.current) {
           pendingGameIdRef.current = null;
           setUploading(false);
-          setError("上传失败，请重试");
+          setError(msg.message || "上传失败，请重试"); // 透传服务端拒绝原因（如：不允许覆盖）
         } else if (pendingImportRef.current) {
           pendingImportRef.current = null;
           setError("导入失败，请重试");
@@ -305,6 +307,8 @@ export default function LabPage() {
   const kindCounts = { card: 0, token: 0, board: 0 };
   for (const e of labState.entities) kindCounts[e.kind]++;
 
+
+
   return (
     // (game) 布局已提供 h-screen 高度，GameBoard 的 h-full 直接填满（无 nav，视口坐标 = 桌面坐标）
     <>
@@ -370,7 +374,7 @@ export default function LabPage() {
               <span>图片 {sprites.length} 张</span>
             </div>
             {importedFrom && (
-              <p className="text-[11px] text-red-500 mb-5">将覆盖原桌游《{importedFrom.name}》</p>
+              <p className="text-[11px] text-green-600 mb-5">将保存为新桌游（原《{importedFrom.name}》不受影响）</p>
             )}
             <div className="flex justify-end gap-2">
               <button className="btn-ghost text-sm" onClick={() => setUploadOpen(false)}>
