@@ -1,4 +1,4 @@
-import type { EntityState, GameState, Pile, Rotation } from "./types";
+import type { EntityState, GameState, Pile, Rotation, Size } from "./types";
 import { CARD_WIDTH, CARD_HEIGHT, OVERLAP_DISTANCE, TABLE_CENTER } from "./layout";
 
 // ============================================================
@@ -83,7 +83,8 @@ export function findOverlap(state: GameState, x: number, y: number, excludeId?: 
 
   // 1. pile 优先（阈值按堆内实体尺寸）
   for (const pile of state.piles) {
-    const pc = centerOf(pile.x, pile.y);
+    const pw = worldOf(state, pile);
+    const pc = centerOf(pw.x, pw.y);
     const pileCard = state.entities.find((e) => e.id === pile.entityIds[0]);
     if (distance(cx, cy, pc.cx, pc.cy) < threshold(pileCard)) {
       return { pile };
@@ -98,13 +99,95 @@ export function findOverlap(state: GameState, x: number, y: number, excludeId?: 
   for (const card of state.entities) {
     if (card.id === excludeId) continue;
     if (inContainer(card.id)) continue;
-    const cc = centerOf(card.x, card.y);
+    const cw = worldOf(state, card);
+    const cc = centerOf(cw.x, cw.y);
     if (distance(cx, cy, cc.cx, cc.cy) < threshold(card)) {
       return { card };
     }
   }
 
   return {};
+}
+
+// ============================================================
+// 版图归属（parentId）— 坐标语义：相对坐标
+// parentId 非空 → x/y 是相对父版图容器的坐标；parentId 空 → x/y 是世界坐标（桌面坐标系）
+// 移动版图只改版图自身坐标，子实体坐标不动（渲染 DOM 层级天然跟随），引擎零移动逻辑
+// ============================================================
+
+/** 实体的有效尺寸（board 旋转 90/270 时宽高互换，与渲染 Card.tsx boardRotated 一致） */
+function effectiveSize(e: EntityState): { width: number; height: number } {
+  const base = e.size ?? { width: 120, height: 168 };
+  const rotated = e.kind === "board" && (e.rotation === 90 || e.rotation === 270);
+  return rotated ? { width: base.height, height: base.width } : base;
+}
+
+/** 实体/牌堆的世界坐标（沿 parentId 链上溯求和；环保护） */
+function worldOf(state: GameState, e: { parentId?: string; x: number; y: number }): { x: number; y: number } {
+  let x = e.x;
+  let y = e.y;
+  let pid = e.parentId;
+  const seen = new Set<string>();
+  while (pid && !seen.has(pid)) {
+    seen.add(pid);
+    const p = state.entities.find((ent) => ent.id === pid);
+    if (!p) break;
+    x += p.x;
+    y += p.y;
+    pid = p.parentId;
+  }
+  return { x, y };
+}
+
+/**
+ * 落点 (x, y)（世界坐标，实体左上角，size 为落点实体渲染尺寸）中心命中的版图：
+ * 中心点在版图世界矩形内；多个重叠取 zIndex 最高。excludeId 排除自身（防 board 认自己为父）
+ */
+function findBoardAt(state: GameState, x: number, y: number, size?: Size, excludeId?: string): EntityState | undefined {
+  const w = size?.width ?? 120;
+  const h = size?.height ?? 168;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  let hit: EntityState | undefined;
+  for (const e of state.entities) {
+    if (e.kind !== "board" || e.id === excludeId) continue;
+    const bw = worldOf(state, e);
+    const s = effectiveSize(e);
+    if (cx >= bw.x && cx <= bw.x + s.width && cy >= bw.y && cy <= bw.y + s.height) {
+      if (!hit || e.zIndex > hit.zIndex) hit = e;
+    }
+  }
+  return hit;
+}
+
+/**
+ * 补归属（幂等）：中心在版图世界矩形内的实体/牌堆写 parentId 并换算为相对坐标。
+ * initialState 构建/加载兜底（旧存档无 parentId、坐标 = 世界）；已有归属的不动
+ * 堆内实体不参与（引擎坐标是入堆前的残留，归属由堆代表，防双重移动）
+ */
+export function assignParents(state: GameState): GameState {
+  const inPile = new Set<string>();
+  for (const p of state.piles) for (const id of p.entityIds) inPile.add(id);
+  const entities = state.entities.map((e) => {
+    // 跳过：堆内实体（坐标是残留）/ 已有归属 / 版图自身（批量判定会互相包含成环，嵌套靠运行时放置写入）
+    if (inPile.has(e.id) || e.parentId || e.kind === "board") return e;
+    const board = findBoardAt(state, e.x, e.y, e.size, e.id);
+    if (!board) return e;
+    const bw = worldOf(state, board);
+    return { ...e, parentId: board.id, x: e.x - bw.x, y: e.y - bw.y };
+  });
+  const piles = state.piles.map((p) => {
+    if (p.parentId) return p;
+    const first = state.entities.find((e) => e.id === p.entityIds[0]);
+    const board = findBoardAt(state, p.x, p.y, first?.size, p.id);
+    if (!board) return p;
+    const bw = worldOf(state, board);
+    return { ...p, parentId: board.id, x: p.x - bw.x, y: p.y - bw.y };
+  });
+  const eChanged = entities.some((e, i) => e !== state.entities[i]);
+  const pChanged = piles.some((p, i) => p !== state.piles[i]);
+  if (!eChanged && !pChanged) return state;
+  return { ...state, entities, piles };
 }
 
 /** 尺寸相同才可堆叠（缺省 120×168 卡牌） */
@@ -131,6 +214,8 @@ function placeAt(state: GameState, cardId: string, x: number, y: number): GameSt
     if (card.kind !== "board" && pileCard && pileCard.kind !== "board" && sameSize(pileCard, card)) {
       return {
         ...state,
+        // 入堆：牌的归属由堆代表（堆的 parentId 管跟随），牌自身脱离版图
+        entities: state.entities.map((e) => (e.id === cardId ? { ...e, parentId: undefined } : e)),
         piles: state.piles.map((p) =>
           p.id === target.pile!.id ? { ...p, entityIds: [...p.entityIds, cardId] } : p,
         ),
@@ -140,22 +225,44 @@ function placeAt(state: GameState, cardId: string, x: number, y: number): GameSt
 
   // 重叠自由牌 → 任一方是版图或尺寸不同 → 不自动建堆
   if (target.card) {
-    if (card.kind !== "board" && target.card.kind !== "board" && sameSize(target.card, card)) {
+    const overlapCard = target.card; // 闭包内窄化不保留，提局部常量
+    if (card.kind !== "board" && overlapCard.kind !== "board" && sameSize(overlapCard, card)) {
+      // 堆整体归属落点所在版图（坐标换算相对，同自由放置语义）
+      const board = findBoardAt(state, x, y, card.size);
+      const bw = board ? worldOf(state, board) : undefined;
       const pile: Pile = {
         id: `pile-${Date.now()}`,
-        entityIds: [target.card.id, cardId],
-        x,
-        y,
+        entityIds: [overlapCard.id, cardId],
+        x: bw ? x - bw.x : x,
+        y: bw ? y - bw.y : y,
+        parentId: board?.id,
       };
-      return { ...state, piles: [...state.piles, pile] };
+      return {
+        ...state,
+        entities: state.entities.map((e) =>
+          e.id === overlapCard.id || e.id === cardId ? { ...e, parentId: undefined } : e,
+        ),
+        piles: [...state.piles, pile],
+      };
     }
   }
 
-  // 空处 / 尺寸不同 → 自由坐标，zIndex 置顶
+  // 空处 / 尺寸不同 → 自由坐标，zIndex 置顶。
+  // 坐标语义：命中版图 → parentId 写版图 + x/y 换算为相对坐标；否则 parentId 清 + x/y 保持世界坐标
   const z = maxZIndex(state) + 1;
+  const board = findBoardAt(state, x, y, card.size, card.id);
+  if (board) {
+    const bw = worldOf(state, board);
+    return {
+      ...state,
+      entities: state.entities.map((e) =>
+        e.id === cardId ? { ...e, x: x - bw.x, y: y - bw.y, zIndex: z, parentId: board.id } : e,
+      ),
+    };
+  }
   return {
     ...state,
-    entities: state.entities.map((e) => (e.id === cardId ? { ...e, x, y, zIndex: z } : e)),
+    entities: state.entities.map((e) => (e.id === cardId ? { ...e, x, y, zIndex: z, parentId: undefined } : e)),
   };
 }
 
@@ -166,6 +273,7 @@ function placeAt(state: GameState, cardId: string, x: number, y: number): GameSt
 export function moveCard(state: GameState, cardId: string, x: number, y: number): GameState {
   const card = findCard(state, cardId);
   if (!card) return state;
+  // 版图移动 = 普通移动（x/y 世界坐标）：子实体存相对坐标，无需引擎联动，渲染 DOM 层级天然跟随
   const removed = removeCard(state, cardId);
   return placeAt(removed, cardId, x, y);
 }
@@ -180,6 +288,8 @@ export function moveCardToHand(state: GameState, cardId: string, seatId: string)
   const removed = removeCard(state, cardId);
   return {
     ...removed,
+    // 入手牌区：脱离版图（手牌无桌面坐标）
+    entities: removed.entities.map((e) => (e.id === cardId ? { ...e, parentId: undefined } : e)),
     seats: removed.seats.map((s) =>
       s.id === seatId ? { ...s, handZone: { entityIds: [...s.handZone.entityIds, cardId] } } : s,
     ),
@@ -202,6 +312,8 @@ export function moveCardToPile(state: GameState, cardId: string, pileId: string)
   if (stillExists) {
     return {
       ...removed,
+      // 入堆：牌的归属由堆代表，自身脱离版图
+      entities: removed.entities.map((e) => (e.id === cardId ? { ...e, parentId: undefined } : e)),
       piles: removed.piles.map((p) =>
         p.id === pileId ? { ...p, entityIds: [...p.entityIds, cardId] } : p,
       ),
@@ -209,7 +321,11 @@ export function moveCardToPile(state: GameState, cardId: string, pileId: string)
   }
 
   // 目标 pile 因移出而解散（拖牌放回自己所在的 ≤2 张 pile）→ 重建单张 pile
-  return { ...removed, piles: [...removed.piles, { ...pile, entityIds: [cardId] }] };
+  return {
+    ...removed,
+    entities: removed.entities.map((e) => (e.id === cardId ? { ...e, parentId: undefined } : e)),
+    piles: [...removed.piles, { ...pile, entityIds: [cardId] }],
+  };
 }
 
 /**
@@ -240,9 +356,21 @@ export function shufflePile(state: GameState, pileId: string): GameState {
 export function movePile(state: GameState, pileId: string, x: number, y: number): GameState {
   const pile = state.piles.find((p) => p.id === pileId);
   if (!pile) return state;
+  // 落点重判归属（x/y 世界坐标）：堆中心落在版图矩形内 → 跟随该版图（坐标换算相对）；否则脱离（保持世界坐标）
+  const first = state.entities.find((e) => e.id === pile.entityIds[0]);
+  const board = findBoardAt(state, x, y, first?.size);
+  if (board) {
+    const bw = worldOf(state, board);
+    return {
+      ...state,
+      piles: state.piles.map((p) =>
+        p.id === pileId ? { ...p, x: x - bw.x, y: y - bw.y, parentId: board.id } : p,
+      ),
+    };
+  }
   return {
     ...state,
-    piles: state.piles.map((p) => (p.id === pileId ? { ...p, x, y } : p)),
+    piles: state.piles.map((p) => (p.id === pileId ? { ...p, x, y, parentId: undefined } : p)),
   };
 }
 
@@ -278,6 +406,7 @@ export function flipPile(state: GameState, pileId: string): GameState {
 /**
  * 顺时针旋转 90°（仅版图生效；卡牌/Token 忽略）。不可变更新。
  * 只改 rotation；尺寸保持原始（渲染/计算处按 rotation 分支取有效尺寸，见 Card 的 boardRotated）。
+ * 旋转不带动其上实体（牌保持绝对坐标），但重判归属：中心仍在旋转后矩形内的保留 parentId，脱离的清掉（防下次移动粘连）
  */
 export function rotateEntity(state: GameState, entityId: string): GameState {
   const index = state.entities.findIndex((e) => e.id === entityId);
@@ -285,14 +414,32 @@ export function rotateEntity(state: GameState, entityId: string): GameState {
   const entity = state.entities[index];
   if (entity.kind !== "board") return state; // 仅版图可旋转
   const next = ((entity.rotation + 90) % 360) as Rotation;
-  return {
-    ...state,
-    entities: [
-      ...state.entities.slice(0, index),
-      { ...entity, rotation: next },
-      ...state.entities.slice(index + 1),
-    ],
-  };
+  const rotated = { ...entity, rotation: next };
+
+  const s = effectiveSize(rotated);
+  const rw = worldOf(state, rotated);
+  const insideBoard = (wx: number, wy: number) =>
+    wx >= rw.x && wx <= rw.x + s.width && wy >= rw.y && wy <= rw.y + s.height;
+
+  const entities = state.entities.map((e) => {
+    if (e.id === entityId) return rotated;
+    if (e.parentId !== entityId) return e;
+    const es = effectiveSize(e);
+    const w = worldOf(state, e);
+    if (insideBoard(w.x + es.width / 2, w.y + es.height / 2)) return e;
+    // 脱离版图：坐标换算回世界（相对坐标 + 父链）
+    return { ...e, parentId: undefined, x: w.x, y: w.y };
+  });
+  const piles = state.piles.map((p) => {
+    if (p.parentId !== entityId) return p;
+    const first = state.entities.find((e) => e.id === p.entityIds[0]);
+    const ps = first?.size ?? { width: 120, height: 168 };
+    const w = worldOf(state, p);
+    if (insideBoard(w.x + ps.width / 2, w.y + ps.height / 2)) return p;
+    return { ...p, parentId: undefined, x: w.x, y: w.y };
+  });
+
+  return { ...state, entities, piles };
 }
 
 /**
@@ -304,7 +451,20 @@ export function removeEntity(state: GameState, entityId: string): GameState {
   const exists = state.entities.some((e) => e.id === entityId);
   if (!exists) return state;
   const removed = removeCard(state, entityId);
-  return { ...removed, entities: removed.entities.filter((e) => e.id !== entityId) };
+  // 删除版图：子实体/子堆恢复自由（坐标换算回世界；嵌套版图的孙实体归属不变，随中间层版图保留）
+  const entities = removed.entities
+    .filter((e) => e.id !== entityId)
+    .map((e) => {
+      if (e.parentId !== entityId) return e;
+      const w = worldOf(removed, e);
+      return { ...e, parentId: undefined, x: w.x, y: w.y };
+    });
+  const piles = removed.piles.map((p) => {
+    if (p.parentId !== entityId) return p;
+    const w = worldOf(removed, p);
+    return { ...p, parentId: undefined, x: w.x, y: w.y };
+  });
+  return { ...removed, entities, piles };
 }
 
 /**
@@ -329,7 +489,7 @@ export function dropHandToTable(state: GameState, seatId: string): GameState {
     ...state,
     entities: state.entities.map((e) => {
       const drop = dropMap.get(e.id);
-      return drop ? { ...e, ...drop } : e;
+      return drop ? { ...e, ...drop, parentId: undefined } : e; // 掉落即自由，脱离版图
     }),
     seats: state.seats.map((s) =>
       s.id === seatId ? { ...s, handZone: { entityIds: [] } } : s,

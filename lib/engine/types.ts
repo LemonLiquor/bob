@@ -49,9 +49,10 @@ export interface EntityState {
   kind: EntityKind;   // 从 prefab 复制（构建/迁移时设置）
   faceUp: boolean;    // 默认 false（卡牌背面朝上）；构建时 token/board 可给 true
   rotation: Rotation; // 默认 0；仅 board 可旋转
-  x: number;          // 自由像素坐标（桌面坐标系）
+  x: number;          // 坐标（parentId 非空 = 相对父版图容器；空 = 世界坐标/桌面坐标系）
   y: number;
-  zIndex: number;     // z 序，越大越靠上
+  zIndex: number;     // z 序，越大越靠上（版图内为容器 SC 内比较）
+  parentId?: string;  // 父级实体 id（仅 board 可做父）：渲染进版图 DOM 容器，移动版图天然跟随。undefined = 自由（世界坐标）
   size?: Size;        // 渲染尺寸（从 prefab 复制）；缺省 120×168 卡牌；不同尺寸不可堆叠
 }
 
@@ -60,6 +61,7 @@ export interface Pile {
   entityIds: string[]; // 从下到上
   x: number;
   y: number;
+  parentId?: string;   // 所在版图 id：坐标相对该版图容器。undefined = 不在版图上（世界坐标）
 }
 
 /** 手牌区 — 无坐标：屏幕 UI 组件，不在桌面坐标系 */

@@ -73,13 +73,16 @@ export default function Pile({ pile, cards, onShuffle, onFlipPile, shiftHeld, zo
       })
     : "";
 
+  // 容器层级 = 堆内最高实体 z（isPileDragging 时置顶）：
+  // z auto（视为 0）会被任何有 zIndex 的实体盖住——堆在版图上时被版图图面盖掉 = "消失"
+  const topZ = cards.reduce((max, c) => Math.max(max, c.zIndex), 0);
   const containerStyle: React.CSSProperties = {
     left: pile.x,
     top: pile.y,
     width: pw,
     height: ph,
     transform: dragTransform,
-    zIndex: isPileDragging ? 9999 : undefined, // 拖动中置顶（防被版图盖住）
+    zIndex: isPileDragging ? 9999 : topZ || undefined, // 拖动中置顶（防被版图盖住）
   };
 
   return (

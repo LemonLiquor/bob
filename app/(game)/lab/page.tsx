@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EntityKind, EntityState, GameAction, GameAssets, GameState, Prefab, Size, Sprite } from "@/lib/engine/types";
-import { applyAction, removeEntity } from "@/lib/engine";
+import { applyAction, removeEntity, assignParents } from "@/lib/engine";
 import { setAssets } from "@/lib/assets/cache";
 import { buildGameFromGroups, type EntityGroup } from "@/lib/pnp/crop";
 import { clearDraft, loadDraft, saveDraft } from "@/lib/storage/draft";
@@ -79,7 +79,7 @@ export default function LabPage() {
     setSprites(assets.sprites);
     setPrefabs(assets.prefabs);
     setAssets(assets); // 渲染必需（同步先于渲染）
-    setLabState({ ...initialState, seats: [] }); // 强制无座
+    setLabState(assignParents({ ...initialState, seats: [] })); // 强制无座 + 补归属（旧桌游无 parentId）
     // 计数器从导入数据续（防后续导入 PDF / 复制的 id 碰撞）
     spriteCounterRef.current = nextSeq(assets.sprites.map((s) => s.id));
     entityCounterRef.current = nextSeq(assets.prefabs.map((p) => p.id));
@@ -121,7 +121,7 @@ export default function LabPage() {
         setName(draft.meta.name);
         setSprites(draft.assets.sprites);
         setPrefabs(draft.assets.prefabs);
-        setLabState({ ...draft.initialState, seats: [] });
+        setLabState(assignParents({ ...draft.initialState, seats: [] }));
         gameIdRef.current = draft.meta.id;
         spriteCounterRef.current = nextSeq(draft.assets.sprites.map((s) => s.id));
         entityCounterRef.current = nextSeq(draft.assets.prefabs.map((p) => p.id));

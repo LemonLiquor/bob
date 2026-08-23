@@ -2,7 +2,7 @@ import type { PlayerInfo, RoomInfo } from "../lib/multiplayer/protocol";
 import type { WebSocket } from "ws";
 import type { GameState } from "../lib/engine/types";
 import { createSeat } from "../lib/engine/demo-data";
-import { dropHandToTable } from "../lib/engine/actions";
+import { dropHandToTable, assignParents } from "../lib/engine/actions";
 import type { GameLibrary } from "./game-library";
 
 // ============================================================
@@ -48,7 +48,8 @@ export class RoomManager {
     const room: Room = {
       code,
       players: new Map([[ws, player]]),
-      gameState: { ...structuredClone(def.initialState), seats: [createSeat()] },
+      // 开房前补一次归属（旧存档无 parentId），保证服务端权威状态与客户端一致
+      gameState: { ...assignParents(structuredClone(def.initialState)), seats: [createSeat()] },
       creatorId: playerId,
       gameId: def.meta.id,
       gameName: def.meta.name,
