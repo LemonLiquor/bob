@@ -47,20 +47,16 @@ function removeFromContainers(state: GameState, cardId: string): GameState {
   };
 }
 
-/**
- * 从所有容器移除 cardId；若来自 pile 且移除后剩余 ≤ 1 张 → 解散 pile（空堆/单张不成堆）。
- * 所有移出牌的路径都必须走这里，否则会残留空 pile。
- */
+/** 从所有容器移除 cardId。**永不解散 pile**（剩 1 张也保留，堆位置/归属承载剩余牌） */
 function removeCard(state: GameState, cardId: string): GameState {
-  const pile = state.piles.find((p) => p.entityIds.includes(cardId));
-  const next = removeFromContainers(state, cardId);
-  if (pile) {
-    const remaining = pile.entityIds.filter((id) => id !== cardId);
-    if (remaining.length <= 1) {
-      return { ...next, piles: next.piles.filter((p) => p.id !== pile.id) };
-    }
-  }
-  return next;
+  return removeFromContainers(state, cardId);
+}
+
+/** 移除空 pile（move 动作末尾调用：牌移走后 entityIds 为空的堆无意义） */
+function pruneEmptyPiles(state: GameState): GameState {
+  const hasEmpty = state.piles.some((p) => p.entityIds.length === 0);
+  if (!hasEmpty) return state;
+  return { ...state, piles: state.piles.filter((p) => p.entityIds.length > 0) };
 }
 
 export interface OverlapTarget {
@@ -268,14 +264,14 @@ function placeAt(state: GameState, cardId: string, x: number, y: number): GameSt
 
 /**
  * 将 cardId 移动到桌面坐标 (x, y)。可来自自由位置 / pile / 手牌区。
- * 若来自 pile 且移出后剩余 ≤ 1 张 → 解散 pile（剩余牌恢复原始坐标）。
+ * pile 永不解散（剩 1 张保留）；移空后由 pruneEmptyPiles 清理。
  */
 export function moveCard(state: GameState, cardId: string, x: number, y: number): GameState {
   const card = findCard(state, cardId);
   if (!card) return state;
   // 版图移动 = 普通移动（x/y 世界坐标）：子实体存相对坐标，无需引擎联动，渲染 DOM 层级天然跟随
   const removed = removeCard(state, cardId);
-  return placeAt(removed, cardId, x, y);
+  return pruneEmptyPiles(placeAt(removed, cardId, x, y));
 }
 
 /** 牌加入指定座位的手牌区末尾。seatId 任意（沙盒允许塞进任何座位）。版图不可入手牌 */
@@ -286,14 +282,14 @@ export function moveCardToHand(state: GameState, cardId: string, seatId: string)
   if (card.kind === "board") return state; // 版图不入手牌区
 
   const removed = removeCard(state, cardId);
-  return {
+  return pruneEmptyPiles({
     ...removed,
     // 入手牌区：脱离版图（手牌无桌面坐标）
     entities: removed.entities.map((e) => (e.id === cardId ? { ...e, parentId: undefined } : e)),
     seats: removed.seats.map((s) =>
       s.id === seatId ? { ...s, handZone: { entityIds: [...s.handZone.entityIds, cardId] } } : s,
     ),
-  };
+  });
 }
 
 /** 牌从手牌区移出，放到桌面坐标 (x, y)（含落点重叠处理）。委托 moveCard */
@@ -305,31 +301,21 @@ export function moveCardFromHand(state: GameState, cardId: string, x: number, y:
 export function moveCardToPile(state: GameState, cardId: string, pileId: string): GameState {
   const card = findCard(state, cardId);
   const pile = state.piles.find((p) => p.id === pileId);
-  if (!card || !pile) return state;
+  if (!card || !pile) return state; // 目标堆不存在 = 无操作（空堆已清理，牌走自由放置路径）
 
   const removed = removeCard(state, cardId);
-  const stillExists = removed.piles.some((p) => p.id === pileId);
-  if (stillExists) {
-    return {
-      ...removed,
-      // 入堆：牌的归属由堆代表，自身脱离版图
-      entities: removed.entities.map((e) => (e.id === cardId ? { ...e, parentId: undefined } : e)),
-      piles: removed.piles.map((p) =>
-        p.id === pileId ? { ...p, entityIds: [...p.entityIds, cardId] } : p,
-      ),
-    };
-  }
-
-  // 目标 pile 因移出而解散（拖牌放回自己所在的 ≤2 张 pile）→ 重建单张 pile
-  return {
+  return pruneEmptyPiles({
     ...removed,
+    // 入堆：牌的归属由堆代表，自身脱离版图
     entities: removed.entities.map((e) => (e.id === cardId ? { ...e, parentId: undefined } : e)),
-    piles: [...removed.piles, { ...pile, entityIds: [cardId] }],
-  };
+    piles: removed.piles.map((p) =>
+      p.id === pileId ? { ...p, entityIds: [...p.entityIds, cardId] } : p,
+    ),
+  });
 }
 
 /**
- * 牌从 pile 移出，放到桌面坐标 (x, y)。委托 moveCard（含解散逻辑）。
+ * 牌从 pile 移出，放到桌面坐标 (x, y)。委托 moveCard（pile 永不解散，空堆由 move 动作清理）。
  */
 export function moveCardFromPile(state: GameState, cardId: string, x: number, y: number): GameState {
   return moveCard(state, cardId, x, y);
@@ -444,7 +430,7 @@ export function rotateEntity(state: GameState, entityId: string): GameState {
 
 /**
  * 删除实体（Lab 本地编辑用，**不进动作注册表/协议**）：
- * 从容器（piles/handZones）移除 + 剩余 ≤1 张解散堆 + 从实体列表删除实例。
+ * 从容器（piles/handZones）移除 + 从实体列表删除实例；空堆由 pruneEmptyPiles 清理。
  * 实体不存在 → 原状态。不可变更新。
  */
 export function removeEntity(state: GameState, entityId: string): GameState {
@@ -464,7 +450,7 @@ export function removeEntity(state: GameState, entityId: string): GameState {
     const w = worldOf(removed, p);
     return { ...p, parentId: undefined, x: w.x, y: w.y };
   });
-  return { ...removed, entities, piles };
+  return pruneEmptyPiles({ ...removed, entities, piles });
 }
 
 /**
