@@ -76,6 +76,7 @@ export default function Pile({ pile, cards, onShuffle, shiftHeld, zoom = 1 }: Pi
     width: pw,
     height: ph,
     transform: dragTransform,
+    zIndex: isPileDragging ? 9999 : undefined, // 拖动中置顶（防被版图盖住）
   };
 
   return (

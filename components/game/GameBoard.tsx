@@ -102,6 +102,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
   }, [dispatch]);
 
   const [isDragging, setIsDragging] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null); // 拖动中的实体 id（拖动中 zIndex 置顶防被版图盖住）
   const [shiftHeld, setShiftHeld] = useState(false); // Shift 按住 = 整堆移动模式
   const dragStartRef = useRef<
     | { kind: "card"; cardId: string; x: number; y: number }
@@ -191,6 +192,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
 
   function handleDragStart(event: DragStartEvent) {
     const id = String(event.active.id);
+    setActiveId(id);
     if (id.startsWith("pile-move-")) {
       // 整堆拖动：取容器位置作起点
       const pileId = id.slice("pile-move-".length);
@@ -211,6 +213,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
     const start = dragStartRef.current;
     dragStartRef.current = null;
     setIsDragging(false);
+    setActiveId(null);
     if (!start) return;
 
     const translated = active.rect.current.translated;
@@ -310,7 +313,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
             {freeCards.map((card) => (
               <div
                 key={card.id}
-                style={{ position: "absolute", left: card.x, top: card.y, zIndex: card.zIndex }}
+                style={{ position: "absolute", left: card.x, top: card.y, zIndex: activeId === card.id ? 9999 : card.zIndex }}
               >
                 <Card card={card} draggable zoom={view.zoom} />
               </div>

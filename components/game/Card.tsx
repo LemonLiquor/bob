@@ -58,6 +58,9 @@ export default function Card({ card, children, draggable = false, zoom = 1 }: Ca
   const cardStyle: React.CSSProperties = {
     width: cw,
     height: ch,
+    // pile 顶牌拖动：Pile 容器 zIndex auto（不建 stacking context）→ 此处置顶直接生效；
+    // 自由卡由外层容器提升（容器有 zIndex 会建 SC，内层提升无效）
+    zIndex: isDragging ? 9999 : undefined,
     // 版图旋转不转容器（容器 = 有效尺寸）；图在容器内居中旋转
     transform: [isDragging ? "scale(1.05)" : "scale(1)", dragTransform].filter(Boolean).join(" "),
   };
