@@ -2,7 +2,7 @@ import { WebSocket } from "ws";
 import type { ClientMessage, ServerMessage } from "../lib/multiplayer/protocol";
 import { RoomManager } from "./room-manager";
 import type { GameLibrary } from "./game-library";
-import { moveCard, moveCardToHand, flipCard, shufflePile, movePile } from "../lib/engine/actions";
+import { moveCard, moveCardToHand, flipCard, flipPile, shufflePile, movePile } from "../lib/engine/actions";
 
 // ============================================================
 // 消息分发 — 解析客户端消息，调用 RoomManager 并回复/广播
@@ -106,6 +106,9 @@ export function handleMessage(
           break;
         case "flip_card":
           newState = flipCard(state, action.cardId);
+          break;
+        case "flip_pile":
+          newState = flipPile(state, action.pileId);
           break;
         case "shuffle_pile":
           newState = shufflePile(state, action.pileId);

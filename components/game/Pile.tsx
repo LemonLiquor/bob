@@ -11,11 +11,12 @@ interface PileProps {
   pile: PileType;
   cards: EntityState[];  // 按从下到上顺序
   onShuffle: (pileId: string) => void;
+  onFlipPile?: (pileId: string) => void; // 翻整叠（hover + Shift+F）
   shiftHeld: boolean; // Shift 按住 → 顶牌禁拖，整堆 draggable 接管（整体移动）
   zoom?: number; // 所在容器缩放倍数：拖拽位移（视口）÷zoom 使视觉跟手
 }
 
-export default function Pile({ pile, cards, onShuffle, shiftHeld, zoom = 1 }: PileProps) {
+export default function Pile({ pile, cards, onShuffle, onFlipPile, shiftHeld, zoom = 1 }: PileProps) {
   // 容器同时是 droppable（牌拖入堆）与 draggable（整堆移动）：
   // - 非 Shift 拖顶牌 → 顶牌 draggable 激活（单牌）
   // - Shift 按住 → 顶牌 disabled → sensor 向上找到容器 → 整堆
@@ -44,10 +45,12 @@ export default function Pile({ pile, cards, onShuffle, shiftHeld, zoom = 1 }: Pi
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       const lower = e.key.toLowerCase();
       if (lower === "r") onShuffle(pile.id);
+      // 翻整叠：Shift+F（无 Shift 的 F = 翻顶牌，由 CardActionProvider 处理）
+      if (e.shiftKey && lower === "f") onFlipPile?.(pile.id);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isHovered, pile.id, onShuffle]);
+  }, [isHovered, pile.id, onShuffle, onFlipPile]);
 
   // hover / 拖拽悬停：黑虚线框变红（不叠加 ring / 实线框）
   const overClass = isOver || isHovered ? "dashed-zone-active" : "dashed-zone";

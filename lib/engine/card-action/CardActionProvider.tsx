@@ -106,7 +106,7 @@ export default function CardActionProvider({
         onCopyRef.current?.(id);
         return;
       }
-      if (lower === "f") onFlipRef.current(id);
+      if (lower === "f" && !e.shiftKey) onFlipRef.current(id); // Shift+F = 翻整叠（Pile 监听），此处排除避免顶牌双翻
       if (lower === "d") onDrawRef.current(id);
       if (lower === "r") onRotateRef.current?.(id);
       if (e.key === "Delete") onDeleteRef.current?.(id);

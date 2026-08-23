@@ -101,6 +101,11 @@ export default function GameBoard({ gameState: propState, onAction, initialState
     dispatch({ type: "shuffle_pile", pileId });
   }, [dispatch]);
 
+  /** 翻整叠（hover 牌堆 + Shift+F）：pile 内 card faceUp 取反 */
+  const handleFlipPile = useCallback((pileId: string) => {
+    dispatch({ type: "flip_pile", pileId });
+  }, [dispatch]);
+
   const [isDragging, setIsDragging] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null); // 拖动中的实体 id（拖动中 zIndex 置顶防被版图盖住）
   const [shiftHeld, setShiftHeld] = useState(false); // Shift 按住 = 整堆移动模式
@@ -326,6 +331,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
                 pile={pile}
                 cards={findCards(gameState, pile.entityIds)}
                 onShuffle={handleShufflePile}
+                onFlipPile={handleFlipPile}
                 shiftHeld={shiftHeld}
                 zoom={view.zoom}
               />

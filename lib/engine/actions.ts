@@ -262,6 +262,19 @@ export function flipCard(state: GameState, cardId: string): GameState {
   };
 }
 
+/** 翻整叠：pile 内所有卡 faceUp 取反（token/board 单面不动，与 flipCard 拦截一致） */
+export function flipPile(state: GameState, pileId: string): GameState {
+  const pile = state.piles.find((p) => p.id === pileId);
+  if (!pile || pile.entityIds.length === 0) return state;
+  const flipSet = new Set(pile.entityIds);
+  return {
+    ...state,
+    entities: state.entities.map((e) =>
+      flipSet.has(e.id) && e.kind === "card" ? { ...e, faceUp: !e.faceUp } : e,
+    ),
+  };
+}
+
 /**
  * 顺时针旋转 90°（仅版图生效；卡牌/Token 忽略）。不可变更新。
  * 只改 rotation；尺寸保持原始（渲染/计算处按 rotation 分支取有效尺寸，见 Card 的 boardRotated）。

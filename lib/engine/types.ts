@@ -100,5 +100,6 @@ export type GameAction =
   | { type: "move_pile"; pileId: string; x: number; y: number } // 整堆移动
   | { type: "move_to_hand"; cardId: string; seatId: string } // seatId 任意（沙盒）
   | { type: "flip_card"; cardId: string }
+  | { type: "flip_pile"; pileId: string } // 翻整叠（pile 内 card faceUp 取反；token/board 单面不动）
   | { type: "rotate_entity"; entityId: string } // 顺时针旋转 90°（仅 board 生效）
   | { type: "shuffle_pile"; pileId: string };
