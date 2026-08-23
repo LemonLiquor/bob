@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { GameAction, GameAssets, GameState, Prefab, Sprite } from "@/lib/engine/types";
+import type { EntityKind, EntityState, GameAction, GameAssets, GameState, Prefab, Size, Sprite } from "@/lib/engine/types";
 import { applyAction, removeEntity } from "@/lib/engine";
 import { setAssets } from "@/lib/assets/cache";
 import { buildGameFromGroups, type EntityGroup } from "@/lib/pnp/crop";
@@ -13,6 +13,7 @@ import GameBoard from "@/components/game/GameBoard";
 import LabEscMenu from "@/components/game/LabEscMenu";
 import ImportGameModal from "@/components/game/ImportGameModal";
 import ImportFlow from "@/components/import/ImportFlow";
+import DrawEntityModal from "@/components/import/DrawEntityModal";
 
 // ============================================================
 // Lab — 桌游组装工作台（主视图）
@@ -49,6 +50,7 @@ function nextSeq(ids: string[]): number {
 export default function LabPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [importGameOpen, setImportGameOpen] = useState(false); // 导入现有桌游弹窗
+  const [drawOpen, setDrawOpen] = useState(false); // 手绘实体弹窗
   const [name, setName] = useState(""); // 桌游名（首次导入取 PDF 名，切片 4 保存时使用）
   const [sprites, setSprites] = useState<Sprite[]>([]); // 全量累积（跨 PDF）
   const [prefabs, setPrefabs] = useState<Prefab[]>([]); // 全量累积
@@ -215,6 +217,37 @@ export default function LabPage() {
     send({ type: "upload_game", meta: payload.meta, assets: payload.assets, initialState: payload.initialState });
   }
 
+  /** 手绘实体落地：sprite + prefab + 实例（网格空位摆位，z 置顶） */
+  function handleDrawCreate({ url, kind, size }: { url: string; kind: EntityKind; size: Size }) {
+    const sprite: Sprite = { id: allocSpriteId(), url };
+    const prefabId = `prefab-${entityCounterRef.current}`;
+    const instId = `inst-${entityCounterRef.current}`;
+    entityCounterRef.current += 1;
+    // card 背面空串 = 渲染回退默认卡背；token/board 单面
+    const prefab: Prefab =
+      kind === "card"
+        ? { kind: "card", id: prefabId, faces: { front: sprite.id, back: "" }, size }
+        : { kind, id: prefabId, faces: { front: sprite.id }, size };
+    const idx = labState.piles.length; // 网格空位（同 ImportFlow，不叠旧实体）
+    const maxZ = labState.entities.reduce((m, e) => Math.max(m, e.zIndex), 0);
+    const entity: EntityState = {
+      id: instId,
+      prefabId,
+      kind,
+      faceUp: kind !== "card", // card 默认背面朝上（与 buildGameFromGroups 一致）
+      rotation: 0,
+      x: GRID_ORIGIN.x + (idx % GRID_COLS) * GRID_STEP.x,
+      y: GRID_ORIGIN.y + Math.floor(idx / GRID_COLS) * GRID_STEP.y,
+      zIndex: maxZ + 1,
+      size,
+    };
+    setSprites((prev) => [...prev, sprite]);
+    setPrefabs((prev) => [...prev, prefab]);
+    setAssets({ sprites: [...sprites, sprite], prefabs: [...prefabs, prefab] }); // 同步先于渲染
+    setLabState((prev) => ({ ...prev, entities: [...prev.entities, entity] }));
+    setDrawOpen(false);
+  }
+
   /** 桌游选择弹窗确认：关弹窗 → 发 get_game（game_data 回来后在 onMessage 落地） */
   function handleImportPick(gameId: string, name: string) {
     setImportGameOpen(false);
@@ -306,11 +339,12 @@ export default function LabPage() {
         empty={empty}
         uploading={uploading}
         restored={restored}
-        disabled={importOpen || uploadOpen || importGameOpen}
+        disabled={importOpen || uploadOpen || importGameOpen || drawOpen}
         onSave={handleSave}
         onUpload={handleUpload}
         onImport={() => setImportOpen(true)}
         onImportGame={() => setImportGameOpen(true)}
+        onDraw={() => setDrawOpen(true)}
         onDiscard={handleDiscardDraft}
         onExit={() => router.push("/games")}
       />
@@ -348,6 +382,10 @@ export default function LabPage() {
             </div>
           </div>
         </div>
+      )}
+      {/* 手绘实体弹窗 */}
+      {drawOpen && (
+        <DrawEntityModal onClose={() => setDrawOpen(false)} onCreate={handleDrawCreate} />
       )}
       {/* 导入现有桌游弹窗：选择 + 两段确认（替换工作区） */}
       {importGameOpen && (
