@@ -8,6 +8,7 @@ import type { GameInfo } from "@/lib/multiplayer/protocol";
 // ImportGameModal — 导入现有桌游弹窗（在现有桌游基础上修改）
 // 挂载时拉取桌游库列表；点桌游 → 两段确认（替换当前工作区）→ onPick(gameId, name)
 // 数据获取（get_game → game_data）由 lab 页面处理，与上传链路同构
+// 关闭只走「取消」按钮，不点遮罩（ESC 菜单呼出的弹窗防误触）
 // ============================================================
 
 interface ImportGameModalProps {
@@ -29,10 +30,7 @@ export default function ImportGameModal({ onClose, onPick }: ImportGameModalProp
   }, []);
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
       <div
         className="bg-card border-2 border-ink p-6 w-full max-w-sm"
         onClick={(e) => e.stopPropagation()}
@@ -57,18 +55,25 @@ export default function ImportGameModal({ onClose, onPick }: ImportGameModalProp
         ) : games.length === 0 ? (
           <p className="text-sm text-muted py-4">桌游库为空，先用 [导入 PDF] 组装并上传一个桌游</p>
         ) : (
-          <div className="flex flex-col gap-1.5 max-h-[50vh] overflow-y-auto">
-            {games.map((game) => (
-              <button
-                key={game.id}
-                className="btn-ghost w-full text-sm flex items-center gap-2 justify-start"
-                onClick={() => setConfirming(game)}
-              >
-                <span className="text-xl">{game.icon}</span>
-                <span>{game.name}</span>
+          <>
+            <div className="flex flex-col gap-1.5 max-h-[50vh] overflow-y-auto mb-4">
+              {games.map((game) => (
+                <button
+                  key={game.id}
+                  className="btn-ghost w-full text-sm flex items-center gap-2 justify-start"
+                  onClick={() => setConfirming(game)}
+                >
+                  <span className="text-xl">{game.icon}</span>
+                  <span>{game.name}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <button className="btn-ghost text-sm" onClick={onClose}>
+                取消
               </button>
-            ))}
-          </div>
+            </div>
+          </>
         )}
       </div>
     </div>

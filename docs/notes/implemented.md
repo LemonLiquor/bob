@@ -3,6 +3,20 @@
 > 记录决定了什么 + 否决了什么，**与代码保持同步**（代码改名/移动时同步更新事实）。
 > 单文件多条目，小项目不建目录；条目按日期倒序。
 
+## ESC 菜单弹窗：不点遮罩关闭（防绘制/选择误触）
+
+- **日期**：2026-08-23（首次提出）
+- **主题**：ESC 菜单呼出的弹窗移除点击遮罩关闭，只走弹窗内「取消」按钮
+
+**决定了什么**：
+
+- **DrawEntityModal / ImportGameModal 移除遮罩 onClick**；ImportGameModal 列表态补齐「取消」按钮（原来只有遮罩可关）
+- **范围**：ESC 菜单呼出的弹窗（导入 PDF ImportFlow / 导入桌游 / 手绘实体 / 上传确认）全部只走按钮关闭；上传确认与 ImportFlow 本就无遮罩关闭
+
+**否决了什么**：
+
+- **遮罩关闭保留**：绘制/选择时点偏即误关，得不偿失
+
 ## Lab 手绘实体：画布透明背景 + 分辨率 = 尺寸 × 2，形状零新字段
 
 - **日期**：2026-08-23（首次提出）
@@ -17,7 +31,10 @@
 - **尺寸输入比例锁定**：宽/高数字框（默认按 kind：卡牌 120×168 / token 80×80 / 版图 240×240），改宽则高按当前比例跟随；画布重建时旧内容 drawImage 等比缩放保留（不变形不丢笔迹）；kind 切换则清空
 - **kind 三 tab**：card 背面空串 = 默认卡背；token 单面可叠；board 可旋转（方形画布与"碰撞盒用未旋转尺寸"无冲突）
 - **上桌**：sprite + prefab + 实例（网格空位摆位同 ImportFlow，z 置顶 maxZ+1）；card faceUp 默认 false（同 buildGameFromGroups）
-- **工具行**：6 色（Bauhaus 色板）/ 3 档笔粗 / 橡皮（destination-out）/ 填色（自实现扫描线 flood fill：栈式 4-邻域 + visited 去重，容差 32 匹配 RGBA 抗锯齿边缘，实际修改像素才压栈）/ 撤销（ImageData 栈 20 步，清空可撤销）/ 清空；绘制 pointerdown + window move/up（拖出画布不断线）；橡皮与填色互斥
+- **工具行**：6 色（Bauhaus 色板）/ 3 档笔粗 / 橡皮（destination-out）/ 填色（自实现扫描线 flood fill：栈式 4-邻域 + visited 去重，容差 32 匹配 RGBA 抗锯齿边缘，实际修改像素才压栈）/ 贴纸（emoji，见下）/ 撤销（ImageData 栈 20 步，清空可撤销）/ 清空；绘制 pointerdown + window move/up（拖出画布不断线）；橡皮与填色互斥
+- **内容源统一（stampToCanvas）**：所有内容源（手绘/emoji/图片）渲染进同一张画布位图，自动获得全部工具链（撤销/橡皮/填色/导出），零分支；`stampToCanvas(render)` = 压栈（渲染前）+ 以画布中心为锚执行渲染
+- **贴纸面板 = 统一内容源入口**：① emoji/文字输入框（全量 = 输入即所得，回车渲染，不内置字符表、不引依赖）② 精选 grid（30 个快捷）③ 大小滑块 stickerScale 0.1~0.9（emoji 字号与图片缩放共用 = 画布 min 边 × scale）④ 导入本地图片（file input → objectURL → Image → drawImage，长边对齐 target 等比缩放）；渲染后压栈可撤销
+- **在线图片扩展点**：复用文本输入框（URL → Image 加载），注意跨域 CORS 与 canvas 污染；本次不做
 
 **否决了什么**：
 

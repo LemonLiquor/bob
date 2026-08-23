@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import type { EntityKind, Size } from "@/lib/engine/types";
 
 // ============================================================
@@ -23,6 +24,13 @@ const SCALE = 4; // 像素分辨率 = 导出尺寸 × 4
 const UNDO_LIMIT = 20;
 const FILL_TOLERANCE = 32; // 填色匹配容差
 const FILL_ALPHA_THRESHOLD = 96; // 填色：alpha ≤ 阈值视为空白（把笔画 AA 边缘补成填充色，不留毛边）
+// 内容源之一：emoji 贴纸（精选快捷入口；全量 = 输入框任意字符，见面板）
+// 后续在线图片 = 复用文本输入框（URL → Image），注意跨域 CORS 与 canvas 污染
+const EMOJIS = [
+  "🎲", "🐴", "🃏", "⚔️", "🛡️", "👑", "💎", "💰", "⭐", "❤️",
+  "🔥", "💧", "🌙", "☀️", "🌈", "🍀", "🏆", "🥇", "📦", "🗝️",
+  "🏰", "🐉", "🦄", "🐺", "🦊", "🐻", "🍎", "⚡", "❄️", "🌲",
+];
 const DISPLAY_H = 320; // 画布显示高度（CSS px），宽按比例
 const SIZE_MIN = 16;
 const SIZE_MAX = 480;
@@ -100,6 +108,10 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
   const [brush, setBrush] = useState(BRUSH_SIZES[1]);
   const [eraser, setEraser] = useState(false);
   const [fillMode, setFillMode] = useState(false); // 填色模式：点击即填充当前颜色
+  const [emojiOpen, setEmojiOpen] = useState(false); // emoji 贴纸面板
+  const [emojiInput, setEmojiInput] = useState(""); // 全量 emoji/文字输入
+  const [stickerScale, setStickerScale] = useState(0.5); // 贴纸大小 = 画布 min 边 × scale（emoji/图片共用）
+  const fileRef = useRef<HTMLInputElement>(null); // 导入图片文件选择器
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const lastRef = useRef<{ x: number; y: number } | null>(null);
@@ -128,6 +140,49 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
     if (!canvas) return;
     pushUndo(); // 清空可撤销
     canvas.getContext("2d")!.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  /** 内容源统一入口：压撤销栈（渲染前）→ 以画布中心为锚点执行渲染。
+   *  现在承载 emoji（fillText）；未来导入图片 = drawImage 闭包，工具链零改动 */
+  function stampToCanvas(render: (ctx: CanvasRenderingContext2D, cx: number, cy: number) => void) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d")!;
+    pushUndo();
+    render(ctx, canvas.width / 2, canvas.height / 2);
+  }
+
+  /** 盖 emoji/文字：彩色系统字体渲染到画布中心（emoji 是彩色像素 → 填色不误吃、橡皮可擦、导出透明 PNG） */
+  function handleEmoji(emoji: string) {
+    stampToCanvas((ctx, cx, cy) => {
+      const size = Math.min(ctx.canvas.width, ctx.canvas.height) * stickerScale;
+      ctx.font = `${size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(emoji, cx, cy);
+    });
+    setEmojiOpen(false);
+  }
+
+  /** 导入本地图片：等比缩放（长边 = 画布 min 边 × 大小比例）贴画布中心；与 emoji 同构走 stampToCanvas */
+  function handleImageFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // 清空以允许重复选择同一文件
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      stampToCanvas((ctx, cx, cy) => {
+        const target = Math.min(ctx.canvas.width, ctx.canvas.height) * stickerScale;
+        const scale = target / Math.max(img.width, img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+      });
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => URL.revokeObjectURL(url);
+    img.src = url;
   }
 
   /** 完成：导出透明 PNG（分辨率 = 尺寸 × 4） */
@@ -215,10 +270,7 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
   }, [color, brush, eraser, fillMode]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
       <div
         className="bg-card border-2 border-ink p-5 w-full max-w-md"
         onClick={(e) => e.stopPropagation()}
@@ -287,7 +339,7 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
           />
         </div>
 
-        {/* 工具行：颜色 / 粗细 / 橡皮 / 撤销 / 清空 */}
+        {/* 工具行：颜色 / 粗细 / 橡皮 / 填色 / 贴纸 / 撤销 / 清空 */}
         <div className="flex items-center gap-3 mb-4 flex-wrap">
           <div className="flex items-center gap-1.5">
             {COLORS.map((c) => (
@@ -344,6 +396,14 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
           >
             填色
           </button>
+          <button
+            className={`text-xs px-3 py-1.5 border-2 cursor-pointer ${
+              emojiOpen ? "bg-ink text-surface border-ink" : "border-ink/40 hover:border-ink"
+            }`}
+            onClick={() => setEmojiOpen((v) => !v)}
+          >
+            贴纸
+          </button>
           <button className="text-xs px-3 py-1.5 border-2 border-ink/40 hover:border-ink cursor-pointer" onClick={undo}>
             撤销
           </button>
@@ -351,6 +411,68 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
             清空
           </button>
         </div>
+
+        {/* 贴纸面板（统一内容源：emoji 全量输入 / 精选 / 大小 / 导入图片） */}
+        {emojiOpen && (
+          <div className="flex flex-col gap-2 mb-4 border-2 border-ink p-2 bg-card">
+            {/* 全量入口：任意 emoji 或文字，回车渲染（在线图片 URL 后续复用此框） */}
+            <input
+              className="input-pop w-full px-2 py-1 text-sm"
+              placeholder="输入 emoji 或文字，回车渲染（如 🤖）"
+              value={emojiInput}
+              onChange={(e) => setEmojiInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const v = emojiInput.trim();
+                  if (v) {
+                    handleEmoji(v);
+                    setEmojiInput("");
+                  }
+                }
+              }}
+            />
+            {/* 精选快捷入口 */}
+            <div className="grid grid-cols-6 gap-1">
+              {EMOJIS.map((e) => (
+                <button
+                  key={e}
+                  className="text-2xl leading-none py-0.5 hover:bg-ink/10 cursor-pointer"
+                  onClick={() => handleEmoji(e)}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+            {/* 大小（emoji 字号与图片缩放共用） */}
+            <div className="flex items-center gap-2 text-xs text-secondary">
+              <span>大小</span>
+              <input
+                type="range"
+                min={0.1}
+                max={0.9}
+                step={0.05}
+                value={stickerScale}
+                onChange={(e) => setStickerScale(Number(e.target.value))}
+                className="flex-1 accent-[var(--ink)]"
+              />
+              <span className="w-10 text-right">{Math.round(stickerScale * 100)}%</span>
+            </div>
+            {/* 导入图片（本地文件；在线图片后续扩展） */}
+            <div className="flex items-center gap-2">
+              <button className="btn-ghost text-xs px-3 py-1.5" onClick={() => fileRef.current?.click()}>
+                导入图片
+              </button>
+              <span className="text-[11px] text-muted">本地图片（png/jpg），在线图片 URL 后续支持</span>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageFile}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="flex justify-end gap-2">
           <button className="btn-ghost text-sm" onClick={onClose}>
