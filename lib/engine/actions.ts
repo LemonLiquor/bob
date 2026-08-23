@@ -77,8 +77,9 @@ export function findOverlap(state: GameState, x: number, y: number, excludeId?: 
     return Math.min(OVERLAP_DISTANCE, Math.min(s.width, s.height) / 2);
   };
 
-  // 1. pile 优先（阈值按堆内实体尺寸）
+  // 1. pile 优先（阈值按堆内实体尺寸；空堆不参与判定）
   for (const pile of state.piles) {
+    if (pile.entityIds.length === 0) continue;
     const pw = worldOf(state, pile);
     const pc = centerOf(pw.x, pw.y);
     const pileCard = state.entities.find((e) => e.id === pile.entityIds[0]);
@@ -118,8 +119,8 @@ function effectiveSize(e: EntityState): { width: number; height: number } {
   return rotated ? { width: base.height, height: base.width } : base;
 }
 
-/** 实体/牌堆的世界坐标（沿 parentId 链上溯求和；环保护） */
-function worldOf(state: GameState, e: { parentId?: string; x: number; y: number }): { x: number; y: number } {
+/** 实体/牌堆的世界坐标（沿 parentId 链上溯求和；环保护）。UI 落点换算也用它 */
+export function worldOf(state: GameState, e: { parentId?: string; x: number; y: number }): { x: number; y: number } {
   let x = e.x;
   let y = e.y;
   let pid = e.parentId;

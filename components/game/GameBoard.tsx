@@ -14,7 +14,7 @@ import Pile from "@/components/game/Pile";
 import Card from "@/components/game/Card";
 import HandZone from "@/components/game/HandZone";
 import OtherHandBar from "@/components/game/OtherHandBar";
-import { applyAction, createSeat, findCards, assignParents } from "@/lib/engine";
+import { applyAction, createSeat, findCards, assignParents, worldOf } from "@/lib/engine";
 import { CardActionProvider } from "@/lib/engine/card-action";
 import type { GameAction, GameState, EntityState } from "@/lib/engine";
 import { sessionStore } from "@/lib/multiplayer/session";
@@ -266,7 +266,9 @@ export default function GameBoard({ gameState: propState, onAction, initialState
     if (overId && overId.startsWith("pile-") && !overId.startsWith("pile-move-")) {
       const pile = gameState.piles.find((p) => p.id === overId);
       if (pile) {
-        dispatch({ type: "move_card", cardId, x: pile.x, y: pile.y });
+        // 落点必须是世界坐标：pile 在版图上时 x/y 是相对坐标，需 worldOf 换算（否则判定错乱、牌脱版图）
+        const w = worldOf(gameState, pile);
+        dispatch({ type: "move_card", cardId, x: w.x, y: w.y });
         return;
       }
     }

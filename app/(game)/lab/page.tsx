@@ -140,6 +140,7 @@ export default function LabPage() {
   }, []);
 
   /** Lab 本地动作：复用引擎（与服务端同分发） */
+  /** Lab 动作入口：应用动作（落点/坐标由引擎与 GameBoard 保证语义一致） */
   function handleLabAction(action: GameAction) {
     setLabState((prev) => applyAction(prev, action));
   }
