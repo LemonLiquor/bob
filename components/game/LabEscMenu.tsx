@@ -17,6 +17,7 @@ interface LabEscMenuProps {
   onSave: () => void;
   onUpload: () => void;
   onImport: () => void;
+  onImportGame: () => void;
   onDiscard: () => void;
   onExit: () => void;
 }
@@ -29,6 +30,7 @@ export default function LabEscMenu({
   onSave,
   onUpload,
   onImport,
+  onImportGame,
   onDiscard,
   onExit,
 }: LabEscMenuProps) {
@@ -68,6 +70,9 @@ export default function LabEscMenu({
         <div className="flex flex-col gap-2">
           <button className="btn-pop w-full text-sm" onClick={closeAnd(onImport)}>
             导入 PDF
+          </button>
+          <button className="btn-ghost w-full text-sm" onClick={closeAnd(onImportGame)}>
+            导入桌游
           </button>
           <button className="btn-ghost w-full text-sm" onClick={closeAnd(onSave)} disabled={empty}>
             保存

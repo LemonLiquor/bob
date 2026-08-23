@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { GameAction, GameState, Prefab, Sprite } from "@/lib/engine/types";
+import type { GameAction, GameAssets, GameState, Prefab, Sprite } from "@/lib/engine/types";
 import { applyAction, removeEntity } from "@/lib/engine";
 import { setAssets } from "@/lib/assets/cache";
 import { buildGameFromGroups, type EntityGroup } from "@/lib/pnp/crop";
@@ -11,6 +11,7 @@ import { send, onMessage } from "@/lib/multiplayer/transport";
 import type { ServerMessage } from "@/lib/multiplayer/protocol";
 import GameBoard from "@/components/game/GameBoard";
 import LabEscMenu from "@/components/game/LabEscMenu";
+import ImportGameModal from "@/components/game/ImportGameModal";
 import ImportFlow from "@/components/import/ImportFlow";
 
 // ============================================================
@@ -47,6 +48,7 @@ function nextSeq(ids: string[]): number {
 
 export default function LabPage() {
   const [importOpen, setImportOpen] = useState(false);
+  const [importGameOpen, setImportGameOpen] = useState(false); // 导入现有桌游弹窗
   const [name, setName] = useState(""); // 桌游名（首次导入取 PDF 名，切片 4 保存时使用）
   const [sprites, setSprites] = useState<Sprite[]>([]); // 全量累积（跨 PDF）
   const [prefabs, setPrefabs] = useState<Prefab[]>([]); // 全量累积
@@ -61,19 +63,48 @@ export default function LabPage() {
   const [uploadOpen, setUploadOpen] = useState(false); // 上传确认弹窗
   const [error, setError] = useState<string | null>(null);
   const pendingGameIdRef = useRef<string | null>(null); // 上传中的 gameId（匹配 game_uploaded）
+  const pendingImportRef = useRef<{ gameId: string; name: string } | null>(null); // 导入中的桌游（匹配 game_data）
+  const [importedFrom, setImportedFrom] = useState<{ id: string; name: string } | null>(null); // 导入模式标记（上传弹窗提示覆盖）
   const router = useRouter();
 
+  /** 导入现有桌游：整体替换工作区（清旧草稿；gameId 沿用原 id → 上传覆盖原桌游） */
+  function importGame(gameId: string, name: string, assets: GameAssets, initialState: GameState) {
+    void clearDraft(); // 旧草稿废弃（导入 = 工作区整体替换）
+    setRestored(false);
+    setImportedFrom({ id: gameId, name });
+    setName(name);
+    gameIdRef.current = gameId;
+    setSprites(assets.sprites);
+    setPrefabs(assets.prefabs);
+    setAssets(assets); // 渲染必需（同步先于渲染）
+    setLabState({ ...initialState, seats: [] }); // 强制无座
+    // 计数器从导入数据续（防后续导入 PDF / 复制的 id 碰撞）
+    spriteCounterRef.current = nextSeq(assets.sprites.map((s) => s.id));
+    entityCounterRef.current = nextSeq(assets.prefabs.map((p) => p.id));
+    pileCounterRef.current = nextSeq(initialState.piles.map((p) => p.id));
+  }
+
   // 上传结果：成功（匹配 gameId）→ 清草稿 + 跳转广场；失败 → 恢复可重试
+  // 导入结果：game_data（匹配 pendingImport）→ 替换工作区
   useEffect(() => {
     const unsub = onMessage((msg: ServerMessage) => {
       if (msg.type === "game_uploaded" && msg.gameId === pendingGameIdRef.current) {
         pendingGameIdRef.current = null;
         void clearDraft();
         router.push("/games");
-      } else if (msg.type === "error" && pendingGameIdRef.current) {
-        pendingGameIdRef.current = null;
-        setUploading(false);
-        setError("上传失败，请重试");
+      } else if (msg.type === "game_data" && pendingImportRef.current?.gameId === msg.gameId) {
+        const pending = pendingImportRef.current;
+        pendingImportRef.current = null;
+        importGame(pending.gameId, pending.name, msg.assets, msg.initialState);
+      } else if (msg.type === "error") {
+        if (pendingGameIdRef.current) {
+          pendingGameIdRef.current = null;
+          setUploading(false);
+          setError("上传失败，请重试");
+        } else if (pendingImportRef.current) {
+          pendingImportRef.current = null;
+          setError("导入失败，请重试");
+        }
       }
     });
     return unsub;
@@ -184,6 +215,13 @@ export default function LabPage() {
     send({ type: "upload_game", meta: payload.meta, assets: payload.assets, initialState: payload.initialState });
   }
 
+  /** 桌游选择弹窗确认：关弹窗 → 发 get_game（game_data 回来后在 onMessage 落地） */
+  function handleImportPick(gameId: string, name: string) {
+    setImportGameOpen(false);
+    pendingImportRef.current = { gameId, name };
+    send({ type: "get_game", gameId });
+  }
+
   /** 丢弃草稿：清 indexDB + 重置工作区（重新开始组装） */
   async function handleDiscardDraft() {
     try {
@@ -268,10 +306,11 @@ export default function LabPage() {
         empty={empty}
         uploading={uploading}
         restored={restored}
-        disabled={importOpen || uploadOpen}
+        disabled={importOpen || uploadOpen || importGameOpen}
         onSave={handleSave}
         onUpload={handleUpload}
         onImport={() => setImportOpen(true)}
+        onImportGame={() => setImportGameOpen(true)}
         onDiscard={handleDiscardDraft}
         onExit={() => router.push("/games")}
       />
@@ -296,6 +335,9 @@ export default function LabPage() {
               </span>
               <span>图片 {sprites.length} 张</span>
             </div>
+            {importedFrom && (
+              <p className="text-[11px] text-red-500 mb-5">将覆盖原桌游《{importedFrom.name}》</p>
+            )}
             <div className="flex justify-end gap-2">
               <button className="btn-ghost text-sm" onClick={() => setUploadOpen(false)}>
                 取消
@@ -306,6 +348,13 @@ export default function LabPage() {
             </div>
           </div>
         </div>
+      )}
+      {/* 导入现有桌游弹窗：选择 + 两段确认（替换工作区） */}
+      {importGameOpen && (
+        <ImportGameModal
+          onClose={() => setImportGameOpen(false)}
+          onPick={handleImportPick}
+        />
       )}
       {/* 导入弹窗：遮罩 + 居中卡片（滚动），四周露出 lab 桌面 */}
       {importOpen && (
