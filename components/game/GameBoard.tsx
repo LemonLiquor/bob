@@ -267,7 +267,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
   return (
     <main
       ref={mainRef}
-      className="h-full board-area relative overflow-hidden"
+      className="h-full board-surface relative overflow-hidden"
     >
       <DndContext
         sensors={sensors}
@@ -293,6 +293,19 @@ export default function GameBoard({ gameState: propState, onAction, initialState
               transformOrigin: "0 0",
             }}
           >
+            {/* 桌面网格（桌面坐标层：随容器缩放平移；垫底且不拦截事件） */}
+            <div
+              className="board-grid"
+              style={{
+                position: "absolute",
+                left: -20000,
+                top: -20000,
+                width: 40000,
+                height: 40000,
+                zIndex: -1,
+                pointerEvents: "none",
+              }}
+            />
             {/* 自由牌 */}
             {freeCards.map((card) => (
               <div

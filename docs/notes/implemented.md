@@ -3,6 +3,22 @@
 > 记录决定了什么 + 否决了什么，**与代码保持同步**（代码改名/移动时同步更新事实）。
 > 单文件多条目，小项目不建目录；条目按日期倒序。
 
+## 桌面网格随缩放/平移（网格 = 桌面坐标层装饰）
+
+- **日期**：2026-08-23（首次提出）
+- **主题**：网格状背景从 viewport 层（固定 40px 屏幕像素）改为桌面坐标层，随容器 transform 一起缩放平移
+
+**决定了什么**：
+
+- **网格搬进缩放容器**：GameBoard 的 `<main>` 不再用 `.board-area`（改 `.board-surface` 纯色底），容器内新增 `.board-grid` div（`position:absolute; left/top:-20000; width/height:40000; zIndex:-1; pointerEvents:none`），40px = 桌面坐标格距，线宽随 zoom 缩放（与卡片同比例）
+- **尺寸 ±20000**：最小 zoom 0.2 → 4000px 屏宽，4K 拉满有余量；再往外露出纯色底
+- **`.board-area` 原样保留**：EntityPanel 导入预览的静态网格继续用它
+- **零换算改动**：`toDesk` / dragEnd 落点 / dnd-kit over 检测 / 引擎坐标全部不变；网格纯装饰（不拦截事件、zIndex 垫底，实体 zIndex ≥ 0）
+
+**否决了什么**：
+
+- **CSS background 跟随 view（方案 B）**：background-size/position 随 view 动态化，无限覆盖但线宽恒 1px、亚像素抖动需取整，不如容器内网格直观
+
 ## 桌面缩放/平移：容器 transform + UI 层坐标换算（引擎零改动）
 
 - **日期**：2026-08-22（首次提出）

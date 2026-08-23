@@ -213,6 +213,19 @@ body {
     background-color: var(--surface);
   }
 
+  /* --- 桌面纯色底（GameBoard 缩放桌面；网格在缩放容器内随缩放平移） --- */
+  .board-surface {
+    background-color: var(--surface);
+  }
+
+  /* --- 桌面网格（桌面坐标层，40px 格距随容器 transform 缩放） --- */
+  .board-grid {
+    background:
+      linear-gradient(90deg, var(--ink) 1px, transparent 1px),
+      linear-gradient(var(--ink) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
   /* --- 虚线放置区（牌堆 / 手牌区 / 导入入口） --- */
   .dashed-zone {
     border: 3px dashed var(--ink);
