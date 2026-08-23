@@ -3,6 +3,23 @@
 > 记录决定了什么 + 否决了什么，**与代码保持同步**（代码改名/移动时同步更新事实）。
 > 单文件多条目，小项目不建目录；条目按日期倒序。
 
+## 手绘弹窗面板化：功能区固定槽位，画布定位稳定
+
+- **日期**：2026-08-23（首次提出）
+- **主题**：贴纸面板出现/消失顶动画布导致绘制定位漂移，弹窗改固定面板布局
+
+**决定了什么**：
+
+- **弹窗 = 固定高度面板**：`flex flex-col max-h-[92vh] overflow-hidden`；标题/kind/尺寸/画布（320px）/工具行/按钮行全部 `shrink-0`，位置恒定
+- **功能区槽位**：`flex-1 min-h-0 overflow-y-auto` 固定占位（贴纸面板 / 放置条共用），内容多时内部滚动；弹窗高度不变 → 画布永不被顶动
+- **贴纸面板常驻**：不再条件渲染（移除 emojiOpen 状态与工具行「贴纸」按钮）；未来「切换收起」= 槽位高度归零，画布/工具行不动（结构已就绪，本次不做）
+- **弹窗改左右分栏**（纵向堆叠改横向）：头部 = 标题 + 取消/完成；左列（shrink-0）= kind / 尺寸 / 画布；右列（flex-1）= 工具行 + 功能区槽位；弹窗加宽至 max-w-3xl
+- **预制 emoji 移除 → 导入历史**：会话内最近 12 条（去重、新在前），emoji 存字符、图片存 dataURL（FileReader，不依赖 objectURL 生命周期）；点击历史直接进入放置模式；空历史有提示
+
+**否决了什么**：
+
+- **弹窗高度随内容自适应**：画布位置漂移的根源，改为固定高度面板
+
 ## ESC 菜单弹窗：不点遮罩关闭（防绘制/选择误触）
 
 - **日期**：2026-08-23（首次提出）
@@ -33,8 +50,12 @@
 - **上桌**：sprite + prefab + 实例（网格空位摆位同 ImportFlow，z 置顶 maxZ+1）；card faceUp 默认 false（同 buildGameFromGroups）
 - **工具行**：6 色（Bauhaus 色板）/ 3 档笔粗 / 橡皮（destination-out）/ 填色（自实现扫描线 flood fill：栈式 4-邻域 + visited 去重，容差 32 匹配 RGBA 抗锯齿边缘，实际修改像素才压栈）/ 贴纸（emoji，见下）/ 撤销（ImageData 栈 20 步，清空可撤销）/ 清空；绘制 pointerdown + window move/up（拖出画布不断线）；橡皮与填色互斥
 - **内容源统一（stampToCanvas）**：所有内容源（手绘/emoji/图片）渲染进同一张画布位图，自动获得全部工具链（撤销/橡皮/填色/导出），零分支；`stampToCanvas(render)` = 压栈（渲染前）+ 以画布中心为锚执行渲染
-- **贴纸面板 = 统一内容源入口**：① emoji/文字输入框（全量 = 输入即所得，回车渲染，不内置字符表、不引依赖）② 精选 grid（30 个快捷）③ 大小滑块 stickerScale 0.1~0.9（emoji 字号与图片缩放共用 = 画布 min 边 × scale）④ 导入本地图片（file input → objectURL → Image → drawImage，长边对齐 target 等比缩放）；渲染后压栈可撤销
-- **在线图片扩展点**：复用文本输入框（URL → Image 加载），注意跨域 CORS 与 canvas 污染；本次不做
+- **贴纸面板 = 统一内容源入口**：① emoji/文字输入框（全量 = 输入即所得，回车渲染，不内置字符表、不引依赖）② 精选 grid（30 个快捷）③ 大小滑块 stickerScale 0.1~0.9（emoji 字号与图片缩放共用 = 画布 min 边 × scale）④ 导入本地图片（file input → objectURL → Image → drawImage，长边对齐 target 等比缩放）
+- **放置模式（贴纸可调位置/大小/预览）**：选贴纸 → 半透明虚线预览层（DOM 叠加在画布容器上，不碰主画布像素 → 撤销栈干净）→ 拖动调位置（window move/up，CSS 位移 ×SCALE 换算画布像素）→ 滑块/滚轮调大小（保持宽高比，中心锚定；滚轮原生监听 passive:false，上下限 8px~2×min 边）→ [放置] 一次性固化（一个撤销步）/ [取消] 或 ESC 放弃；放置期间锁绘制（预览层挡中心，画布边缘 onDown 拦截）；`stampToCanvas` 签名升级为矩形锚点 (rect, render)，emoji fillText / 图片 drawImage 同构
+- **在线图片扩展点**：复用文本输入框（URL → Image 加载，需 CORS 处理防 canvas 污染），本次不做
+- **画布像素 ↔ CSS 显示换算（cssK）**：预览层/拖动用 `cssK = SCALE × size.height / DISPLAY_H`（画布像素 × cssK = CSS px），**不能用 1/SCALE**——显示尺寸（DISPLAY_H=320）与分辨率（size×SCALE）独立；曾误用 ÷SCALE 导致预览只有实际 1/4、拖动 ×SCALE 放大 4 倍飞出去、拖飞后放置内容在画布外
+- **预览与绘制位置对齐**：canvas 的 border 移到画布容器（canvas 无 border）——border-box 下 canvas 内容区缩进 border 宽度，预览坐标相对容器原点会整体偏移 border px；图片 objectURL 延迟到放置/取消后才 revoke（预览 `<img>` 依赖它）
+- **放置模式 clamp**：拖动限制贴纸中心在画布内（防拖飞后放置不可见）；kind 切换画布重建时取消未放置的贴纸
 
 **否决了什么**：
 
