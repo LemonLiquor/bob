@@ -3,6 +3,24 @@
 > 记录决定了什么 + 否决了什么，**与代码保持同步**（代码改名/移动时同步更新事实）。
 > 单文件多条目，小项目不建目录；条目按日期倒序。
 
+## 资产清洗：创建桌游最后一步删除不可达 prefab / sprite
+
+- **日期**：2026-09-17（首次提出）
+- **主题**：PDF 导入未选用图片、删实体后的孤儿 prefab 长期堆积（存量最大单文件 60 MB，清理后 9.8 MB），新增资产清洗能力
+
+**决定了什么**：
+
+- **纯函数 `pruneUnusedAssets(assets, entities)`**（`lib/engine/prune-assets.ts`，engine 导出）：判定与运行时引用链一致——prefab 被 `initialState.entities[].prefabId` 引用才保留；sprite 被保留 prefab 的 `faces` 引用才保留。不重编号 id、保持数组原顺序、不修改入参
+- **调用点 = 创建桌游最后一步**：`server/game-library.ts saveGame()` 写入/入内存前清洗（唯一持久化入口，服务端纵深防御；日志输出 pruned 数量）
+- **悬空引用不处理**：entity→缺失 prefab / prefab→缺失 sprite 只影响渲染回退，不删实体、不改引用
+- **存量清理用临时脚本 `scripts/clean-assets.mjs`**：默认 dry-run，`--write` 先备份到 `server/data/backup-<ts>/` 再原地写回；已对 4 个桌游执行（sprites -1890 / prefabs -155，`server/data/games` 76 MB→19 MB）。**脚本不随产品维护**，产品能力以 `pruneUnusedAssets` 为准
+
+**否决了什么**：
+
+- **客户端 Lab 上传前清洗**：服务端 saveGame 已兜底（唯一持久化入口），避免双点维护；上传 payload 体积优化另立需求
+- **sprite 去重**（同 URL 多份，存量约 800 组，需重映射 faces 引用）：独立能力，先不做
+- **loadAll 时清洗**：加载路径不做写操作，存量已由临时脚本清过
+
 ## 版图跟随（相对坐标 + DOM 层级）：移动版图零引擎联动
 
 - **日期**：2026-08-23（首次提出）

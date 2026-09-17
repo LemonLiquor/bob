@@ -7,4 +7,5 @@ export {
 } from "./actions";
 export type { OverlapTarget } from "./actions";
 export { createSeat, createSeatFromTemplate, DEFAULT_SEAT_TEMPLATE } from "./demo-data";
+export { pruneUnusedAssets } from "./prune-assets";
 export { stackLayout, spreadLayout, STACK_OFFSET, SPREAD_GAP, CARD_WIDTH, CARD_HEIGHT, OVERLAP_DISTANCE, TABLE_CENTER } from "./layout";
