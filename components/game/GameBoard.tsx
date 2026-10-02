@@ -112,7 +112,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
   const [isDragging, setIsDragging] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null); // 拖动中的实体 id（拖动中 zIndex 置顶防被版图盖住）
   const [shiftHeld, setShiftHeld] = useState(false); // Shift 按住 = 整堆移动模式
-  // 拖拽累计位移（视口坐标）：版图拖动时同步给容器跟随层（子实体 DOM 父子天然跟随）
+  // 拖拽累计位移（视口坐标）：版图拖动时叠加到其后代的渲染坐标（拍平渲染的跟随机制）
   const [dragDelta, setDragDelta] = useState({ x: 0, y: 0 });
   const dragStartRef = useRef<
     | { kind: "card"; cardId: string; x: number; y: number }
@@ -219,7 +219,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
     setIsDragging(true);
   }
 
-  // 拖动中：记录累计位移（视口坐标），版图容器跟随层按此平移（渲染时 ÷zoom）
+  // 拖动中：记录累计位移（视口坐标），被拖版图的后代渲染位置叠加此 delta（渲染时 ÷zoom）
   function handleDragMove(event: DragMoveEvent) {
     setDragDelta({ x: event.delta.x, y: event.delta.y });
   }
@@ -292,14 +292,15 @@ export default function GameBoard({ gameState: propState, onAction, initialState
     return set;
   }, [gameState]);
 
-  // DOM 层级方案渲染分组：
-  // - 自由层：parentId 为空的实体（不含版图）/ 牌堆 —— 桌面坐标系绝对定位
-  // - 版图层：顶层版图（parentId 为空）用 BoardContainer 递归渲染，子实体/子堆/嵌套版图挂在其 DOM 下
-  const freeCards = gameState.entities.filter(
-    (e) => !inContainer.has(e.id) && e.parentId === undefined && e.kind !== "board",
-  );
-  const freePiles = gameState.piles.filter((p) => p.parentId === undefined);
-  const topBoards = gameState.entities.filter((e) => e.kind === "board" && e.parentId === undefined);
+  // 拍平渲染分组：不在 pile / 手牌区的实体全部平级渲染（含版图）；牌堆全部平级渲染
+  // 版图内实体/堆不再是 DOM 子节点——位置 = worldOf（parentId 链求和），跟随 = 祖先拖拽 delta
+  const flatEntities = gameState.entities.filter((e) => !inContainer.has(e.id));
+  // 拖拽中的版图 id：拖版图时其全部后代（实体/堆/嵌套版图）整体抬升 + delta 跟随
+  const draggedBoardId = useMemo(() => {
+    if (!activeId) return null;
+    const e = gameState.entities.find((x) => x.id === activeId);
+    return e?.kind === "board" ? e.id : null;
+  }, [activeId, gameState]);
 
   return (
     <main
@@ -345,43 +346,54 @@ export default function GameBoard({ gameState: propState, onAction, initialState
                 pointerEvents: "none",
               }}
             />
-            {/* 自由实体（不含版图） */}
-            {freeCards.map((card) => (
-              <div
-                key={card.id}
-                style={{ position: "absolute", left: card.x, top: card.y, zIndex: activeId === card.id ? 9999 : card.zIndex }}
-              >
-                <Card card={card} draggable zoom={view.zoom} />
-              </div>
-            ))}
+            {/* 拍平实体层：位置 = worldOf + 祖先版图拖拽 delta；zIndex 全局单一维度（被拖者/被拖版图后代抬升） */}
+            {flatEntities.map((e) => {
+              const w = worldOf(gameState, e);
+              const follows =
+                draggedBoardId !== null &&
+                activeId !== e.id &&
+                ancestorChainHas(gameState, e.parentId, draggedBoardId);
+              const pos = follows
+                ? { x: w.x + dragDelta.x / view.zoom, y: w.y + dragDelta.y / view.zoom }
+                : w;
+              const baseZ = renderedZ(gameState, e);
+              const z = activeId === e.id || follows ? DRAG_BASE + baseZ : baseZ;
+              return e.kind === "board" ? (
+                <FlatBoard key={e.id} board={e} pos={pos} z={z} zoom={view.zoom} />
+              ) : (
+                <div key={e.id} style={{ position: "absolute", left: pos.x, top: pos.y, zIndex: z }}>
+                  <Card card={e} draggable zoom={view.zoom} />
+                </div>
+              );
+            })}
 
-            {/* 自由牌堆 */}
-            {freePiles.map((pile) => (
-              <Pile
-                key={pile.id}
-                pile={pile}
-                cards={findCards(gameState, pile.entityIds)}
-                onShuffle={handleShufflePile}
-                onFlipPile={handleFlipPile}
-                shiftHeld={shiftHeld}
-                zoom={view.zoom}
-              />
-            ))}
-
-            {/* 顶层版图（DOM 层级：子实体/子堆/嵌套版图渲染为容器子节点，移动版图天然跟随） */}
-            {topBoards.map((board) => (
-              <BoardContainer
-                key={board.id}
-                board={board}
-                gameState={gameState}
-                activeId={activeId}
-                dragDelta={dragDelta}
-                zoom={view.zoom}
-                shiftHeld={shiftHeld}
-                onShuffle={handleShufflePile}
-                onFlipPile={handleFlipPile}
-              />
-            ))}
+            {/* 拍平牌堆层：定位/层级同实体；堆内牌渲染在 Pile 内部（自包含单元，无需逃逸） */}
+            {gameState.piles.map((pile) => {
+              const cards = findCards(gameState, pile.entityIds);
+              const topZ = cards.reduce((m, c) => Math.max(m, c.zIndex), 0);
+              const selfDragging = activeId === `pile-move-${pile.id}`;
+              const memberDragging = activeId !== null && pile.entityIds.includes(activeId);
+              const follows =
+                draggedBoardId !== null && ancestorChainHas(gameState, pile.parentId, draggedBoardId);
+              const w = worldOf(gameState, pile);
+              const pos = follows
+                ? { x: w.x + dragDelta.x / view.zoom, y: w.y + dragDelta.y / view.zoom }
+                : w;
+              const baseZ = Math.max(topZ, renderedZ(gameState, { parentId: pile.parentId, zIndex: topZ }));
+              const z = selfDragging || memberDragging || follows ? DRAG_BASE + baseZ : baseZ || undefined;
+              return (
+                <div key={pile.id} style={{ position: "absolute", left: pos.x, top: pos.y, zIndex: z }}>
+                  <Pile
+                    pile={pile}
+                    cards={cards}
+                    onShuffle={handleShufflePile}
+                    onFlipPile={handleFlipPile}
+                    shiftHeld={shiftHeld}
+                    zoom={view.zoom}
+                  />
+                </div>
+              );
+            })}
           </div>
 
           {/* 自己的手牌区（屏幕底部，spread 展开） */}
@@ -404,112 +416,57 @@ export default function GameBoard({ gameState: propState, onAction, initialState
 }
 
 // ============================================================
-// BoardContainer — 版图 DOM 层级容器（用户方案）
-// 版图是 droppable；放置其上的实体/牌堆渲染为容器子节点（相对坐标），
-// 移动版图 = DOM 父子天然跟随。嵌套版图递归。
+// 拍平渲染辅助 — z 序全局单一维度
+// 引擎 placeAt 的 z = maxZ+1（全局单调）→ 实体 zIndex 直接可信；
+// 渲染不嵌套层叠上下文，"容器成员被裹挟沉底"类 z 序问题从结构上消除。
+// 版图跟随：后代位置 = worldOf + 被拖版图 dragDelta（UI 层唯一换算点）。
 // ============================================================
 
-/** activeId 拖拽中的实体是否属于本版图（自身 / 子实体 / 子堆顶牌 / parentId 链上溯，含嵌套） */
-function boardLifted(state: GameState, board: EntityState, activeId: string | null): boolean {
-  if (!activeId) return false;
-  // 起点的归属：整堆拖拽取堆的 parentId；堆内顶牌拖拽取所在堆的 parentId
-  let startId: string | undefined;
-  if (activeId.startsWith("pile-move-")) {
-    const pid = activeId.slice("pile-move-".length);
-    startId = state.piles.find((p) => p.id === pid)?.parentId;
-  } else {
-    const pileOf = state.piles.find((p) => p.entityIds.includes(activeId));
-    startId = pileOf?.parentId;
-  }
-  if (startId === board.id) return true;
-  // 沿 parentId 链上溯（覆盖嵌套版图与深层后代）
-  let e = startId ? state.entities.find((x) => x.id === startId) : undefined;
-  while (e) {
-    if (e.id === board.id) return true;
-    const pid = e.parentId;
-    e = pid ? state.entities.find((x) => x.id === pid) : undefined;
+/** 拖拽置顶基准：远高于常规 zIndex（每次放置 +1，会话内百次量级） */
+const DRAG_BASE = 100000;
+
+/** parentId 链是否经过 targetId（环保护）。牌堆归属链同样适用（pile.parentId → 版图链） */
+function ancestorChainHas(state: GameState, startPid: string | undefined, targetId: string): boolean {
+  let pid = startPid;
+  const seen = new Set<string>();
+  while (pid && !seen.has(pid)) {
+    if (pid === targetId) return true;
+    seen.add(pid);
+    pid = state.entities.find((e) => e.id === pid)?.parentId;
   }
   return false;
 }
 
-interface BoardContainerProps {
-  board: EntityState;
-  gameState: GameState;
-  activeId: string | null;
-  dragDelta: { x: number; y: number }; // 拖拽累计位移（视口坐标）：版图拖动时同步给跟随层
-  zoom: number;
-  shiftHeld: boolean;
-  onShuffle: (pileId: string) => void;
-  onFlipPile: (pileId: string) => void;
+/**
+ * 渲染 z：自身 zIndex 与"祖先版图 z + 1"取大。
+ * 版图每次移动 placeAt 刷新自身 z = maxZ+1，会压过此前放置的子实体——
+ * 后代（实体/堆）恒在父版图图面之上，这里在渲染层兜住，引擎不动
+ */
+function renderedZ(state: GameState, e: { parentId?: string; zIndex: number }): number {
+  let z = e.zIndex;
+  let pid = e.parentId;
+  const seen = new Set<string>();
+  while (pid && !seen.has(pid)) {
+    seen.add(pid);
+    const p = state.entities.find((x) => x.id === pid);
+    if (!p) break;
+    if (p.kind === "board") z = Math.max(z, p.zIndex + 1);
+    pid = p.parentId;
+  }
+  return z;
 }
 
-function BoardContainer({ board, gameState, activeId, dragDelta, zoom, shiftHeld, onShuffle, onFlipPile }: BoardContainerProps) {
-  // 版图 droppable：拖牌悬停高亮（放置语义由引擎 placeAt 的落点判定处理，此处只做反馈）
+/** 平级版图：droppable 悬停高亮（放置语义由引擎 placeAt 落点判定，此处只做反馈） */
+function FlatBoard({ board, pos, z, zoom }: { board: EntityState; pos: { x: number; y: number }; z: number; zoom: number }) {
   const { isOver, setNodeRef } = useDroppable({ id: board.id });
-
-  const childEntities = gameState.entities.filter(
-    (e) => e.parentId === board.id && e.kind !== "board",
-  );
-  const childBoards = gameState.entities.filter((e) => e.parentId === board.id && e.kind === "board");
-  const childPiles = gameState.piles.filter((p) => p.parentId === board.id);
-
-  // 拖拽中的实体在本版图内 → 容器整体置顶：SC 内各实体 z 不变（子实体仍盖住版图），对外全局顶
-  const lifted = boardLifted(gameState, board, activeId);
-  // 拖拽的是版图自身 → 跟随层与 Card 的 dnd transform 同步平移，子实体 DOM 父子天然跟随（不双重位移）
-  const followTransform =
-    activeId === board.id ? `translate(${dragDelta.x / zoom}px, ${dragDelta.y / zoom}px)` : undefined;
-
   return (
     <div
       ref={setNodeRef}
       data-board-id={board.id}
-      className={`${isOver ? "ring-2 ring-highlight" : ""} rounded-lg`}
-      style={{ position: "absolute", left: board.x, top: board.y, zIndex: lifted ? 9999 : board.zIndex }}
+      className={`rounded-lg ${isOver ? "ring-2 ring-highlight" : ""}`}
+      style={{ position: "absolute", left: pos.x, top: pos.y, zIndex: z }}
     >
       <Card card={board} draggable zoom={zoom} />
-      {/* 跟随层：版图拖动时随 Card 同步平移（子实体/子堆/嵌套版图全部 DOM 跟随） */}
-      <div style={{ position: "absolute", left: 0, top: 0, transform: followTransform }}>
-        {/* 子实体（x/y = 相对版图坐标，直接定位；z 在版图 SC 内比较，天然高于版图本体） */}
-        {childEntities.map((card) => (
-          <div
-            key={card.id}
-            style={{
-              position: "absolute",
-              left: card.x,
-              top: card.y,
-              zIndex: card.zIndex,
-            }}
-          >
-            <Card card={card} draggable zoom={zoom} />
-          </div>
-        ))}
-        {/* 子牌堆（x/y = 相对版图坐标） */}
-        {childPiles.map((pile) => (
-          <Pile
-            key={pile.id}
-            pile={pile}
-            cards={findCards(gameState, pile.entityIds)}
-            onShuffle={onShuffle}
-            onFlipPile={onFlipPile}
-            shiftHeld={shiftHeld}
-            zoom={zoom}
-          />
-        ))}
-        {/* 嵌套版图（递归，x/y = 相对父版图坐标） */}
-        {childBoards.map((b) => (
-          <BoardContainer
-            key={b.id}
-            board={b}
-            gameState={gameState}
-            activeId={activeId}
-            dragDelta={dragDelta}
-            zoom={zoom}
-            shiftHeld={shiftHeld}
-            onShuffle={onShuffle}
-            onFlipPile={onFlipPile}
-          />
-        ))}
-      </div>
     </div>
   );
 }

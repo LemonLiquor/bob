@@ -73,16 +73,13 @@ export default function Pile({ pile, cards, onShuffle, onFlipPile, shiftHeld, zo
       })
     : "";
 
-  // 容器层级 = 堆内最高实体 z（isPileDragging 时置顶）：
-  // z auto（视为 0）会被任何有 zIndex 的实体盖住——堆在版图上时被版图图面盖掉 = "消失"
-  const topZ = cards.reduce((max, c) => Math.max(max, c.zIndex), 0);
+  // 定位与层级由 GameBoard 的拍平 wrapper 承担（世界坐标 + 全局 zIndex）；容器只负责堆内布局
   const containerStyle: React.CSSProperties = {
-    left: pile.x,
-    top: pile.y,
+    left: 0,
+    top: 0,
     width: pw,
     height: ph,
     transform: dragTransform,
-    zIndex: isPileDragging ? 9999 : topZ || undefined, // 拖动中置顶（防被版图盖住）
   };
 
   return (
