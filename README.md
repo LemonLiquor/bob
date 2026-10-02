@@ -33,6 +33,11 @@
 - [ ] 六边形网格桌游支持
 - [ ] 桌面多套配色主题
 - [ ] 打包好的安装包（网页版 / 桌面版）
+- [ ] 翻面 3D 动画（rotateY + backface-visibility；需 Card 正反面同时渲染）
+- [ ] 卡牌堆叠物理感（透视 / 阴影层次 / 厚度模拟，替换 STACK_OFFSET）
+- [ ] 手牌 >7 张半遮盖模式（悬停浮出）
+- [ ] 秘密信息与可见性（方向已定：可见性挂容器类型——handZone 私有、pile/自由牌公开；实现时机后置）
+- [ ] dnd-kit SSR hydration mismatch（先复现验证：React 19 + Next 16 下可能已自愈）
 
 
 ## 技术栈
