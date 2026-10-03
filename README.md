@@ -44,7 +44,7 @@
 
 - Next.js 16（App Router + Turbopack）+ TypeScript + Tailwind CSS v4
 - @dnd-kit/core — 拖拽
-- ws — WebSocket 服务器（端口 3001，与 Next.js 3000 分离，避免 HMR 冲突）
+- ws — WebSocket 游戏服（custom server 模式与 Next.js 同端口同进程，`/ws` 路径分发）
 - pdfjs-dist — PDF 渲染
 - zod — 数据校验
 
@@ -52,8 +52,8 @@
 
 ```bash
 npm install
-npm run dev       # Next.js → http://localhost:3000
-npm run dev:ws    # 多人联机 WS 服务器 → :3001（单机试玩可不开）
+npm run dev       # 统一服务（Next 页面 + ws）→ http://localhost:3000
+npm run dev:ws    # 独立 ws 模式（遗留兼容，前端单独托管时用）→ :3001
 ```
 
 浏览器打开 `http://localhost:3000`，输入昵称进入游戏广场：导入 PDF 生成桌游、试玩、或创建房间多人游玩。
@@ -82,7 +82,7 @@ bob/
 │   ├── pnp/                         # PDF 渲染 + 网格裁切
 │   ├── assets/                      # 卡牌资产内存缓存
 │   └── multiplayer/                 # 联机（connection / protocol / session / transport）
-└── server/                          # WS 服务器（index / handlers / room-manager / game-library）
+└── server/                          # 服务端（custom-server 统一入口 / game-ws / index 独立模式 / handlers / room-manager / game-library）
 ```
 
 ## 相关文档
@@ -99,3 +99,4 @@ bob/
 - **引擎纯函数**：`lib/engine` 是零 UI 依赖的纯函数层（不可变更新），客户端和服务端共用
 - **动作注册表**：`lib/engine/reducers.ts` 一份动作分发，GameBoard 与服务端共用，新增动作零改分发层
 - **服务端权威**：服务端顺序应用动作即权威，`state_sync` 广播全量状态
+- **统一端口（custom server）**：`server/custom-server.ts` 一个进程一个端口同时服务 Next 页面与 ws（`/ws` 路径分发 upgrade，HMR 交还 Next）；ws 地址由客户端同源回退（`ws(s)://当前域名/ws`），内网穿透只需一条隧道一次证书同意

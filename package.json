@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "tsx server/custom-server.ts",
     "dev:ws": "tsx server/index.ts",
-    "dev:lan": "next dev --hostname 0.0.0.0",
+    "dev:lan": "tsx server/custom-server.ts --host 0.0.0.0",
     "build": "next build",
-    "start": "next start",
+    "start": "tsx server/custom-server.ts --prod",
     "lint": "eslint"
   },
   "dependencies": {

@@ -1,29 +1,26 @@
-import { WebSocketServer } from "ws";
-import { RoomManager } from "./room-manager";
-import { handleMessage } from "./handlers";
-import { GameLibrary } from "./game-library";
+import http from "node:http";
+import { createGameWss, isWsPath } from "./game-ws";
 
-const PORT = 3001;
+/**
+ * 独立 ws 模式（遗留兼容）：前端单独托管 / 调试时用，`npm run dev:ws`。
+ * 统一端口方案见 custom-server.ts（ws 与 Next 同端口）。
+ */
+const PORT = Number(process.env.WS_PORT ?? 3001);
 
-// 桌游库：加载磁盘（只含用户上传的桌游，无内置游戏）
-const gameLibrary = new GameLibrary();
-gameLibrary.loadAll();
-
-const roomManager = new RoomManager(gameLibrary);
-
-const wss = new WebSocketServer({ port: PORT }, () => {
-  console.log(`[ws] listening on :${PORT}`);
+const server = http.createServer((_req, res) => {
+  res.writeHead(426).end("Upgrade Required");
 });
 
-wss.on("connection", (ws) => {
-  console.log("[ws] client connected");
+const wss = createGameWss();
 
-  ws.on("message", (data) => {
-    handleMessage(ws, data, roomManager, gameLibrary);
-  });
+server.on("upgrade", (req, socket, head) => {
+  if (isWsPath(req.url)) {
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+  } else {
+    socket.destroy();
+  }
+});
 
-  ws.on("close", () => {
-    roomManager.handleDisconnect(ws);
-    console.log("[ws] client disconnected");
-  });
+server.listen(PORT, () => {
+  console.log(`[ws] listening on :${PORT}`);
 });
