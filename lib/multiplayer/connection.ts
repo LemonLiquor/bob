@@ -2,9 +2,14 @@ type ConnectionStatus = "connecting" | "connected" | "reconnecting" | "disconnec
 type StatusListener = (status: ConnectionStatus) => void;
 
 function getWsUrl(): string {
-  console.log(`[ws] current hostname: ${window.location.hostname}`);
   if (typeof window === "undefined") return "";
+  console.log(`[ws] current hostname: ${window.location.hostname}`);
 
+  // 内网穿透：https 页面必须 wss；隧道地址配在 .env.local 的 NEXT_PUBLIC_WS_URL（不入库），
+  // 缺省回退同域名 /ws（frp 转发到本机 :3001）
+  if (window.location.protocol === "https:") {
+    return process.env.NEXT_PUBLIC_WS_URL || `wss://${window.location.host}/ws`;
+  }
   // 本地开发模式：ws 服务器运行在 :3001（与 Next.js :3000 分离，避免 HMR 冲突）
   return `ws://${window.location.hostname}:3001/ws`;
 }
