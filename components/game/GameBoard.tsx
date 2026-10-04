@@ -436,9 +436,9 @@ function ancestorChainHas(state: GameState, startPid: string | undefined, target
 }
 
 /**
- * 渲染 z：自身 zIndex 与"祖先版图 z + 1"取大。
- * 版图每次移动 placeAt 刷新自身 z = maxZ+1，会压过此前放置的子实体——
- * 后代（实体/堆）恒在父版图图面之上，这里在渲染层兜住，引擎不动
+ * 渲染 z：自身 zIndex 与"每个祖先 z + 1"取大。
+ * 任意实体可做宿主后，宿主每次移动 placeAt 都刷新自身 z = maxZ+1，
+ * 会压过此前放置的子实体——后代（实体/堆）恒在所有祖先图面之上，这里在渲染层兜住，引擎不动
  */
 function renderedZ(state: GameState, e: { parentId?: string; zIndex: number }): number {
   let z = e.zIndex;
@@ -448,7 +448,7 @@ function renderedZ(state: GameState, e: { parentId?: string; zIndex: number }): 
     seen.add(pid);
     const p = state.entities.find((x) => x.id === pid);
     if (!p) break;
-    if (p.kind === "board") z = Math.max(z, p.zIndex + 1);
+    z = Math.max(z, p.zIndex + 1);
     pid = p.parentId;
   }
   return z;
