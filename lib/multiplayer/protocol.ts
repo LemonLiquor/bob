@@ -2,9 +2,9 @@
 // 共享消息协议 — 客户端和服务端共用
 // ============================================================
 
-import type { GameAssets, GameAction, GameState, Seat } from "../engine/types";
+import type { GameAssets, GameAction, GameState, Seat, GamePreset } from "../engine/types";
 
-export type { GameAction }; // 由 engine/types 定义，此处 re-export 保持 API 不变
+export type { GameAction, GamePreset }; // 由 engine/types 定义，此处 re-export 保持 API 不变
 
 // --- Client → Server ---
 
@@ -25,7 +25,10 @@ export type ClientMessage =
   | { type: "game_action"; action: GameAction }
   | { type: "update_game_state"; state: GameState } // 仅房主：整包替换（重新开始等）
   | { type: "occupy_seat"; seatId: string }
-  | { type: "vacate_seat" };
+  | { type: "vacate_seat" }
+  | { type: "save_preset"; name: string } // 仅房主：当前桌面存为预设（手牌退回桌面）
+  | { type: "load_preset"; presetId: string } // 仅房主：加载预设（保留座位、清手牌、计分归零）
+  | { type: "list_presets" };
 
 // --- Server → Client ---
 
@@ -52,4 +55,5 @@ export type ServerMessage =
   | { type: "player_joined"; player: PlayerInfo; seats: Seat[] }
   | { type: "player_left"; playerId: string; players: PlayerInfo[]; seats: Seat[] }
   | { type: "state_sync"; state: GameState }
+  | { type: "presets_list"; presets: GamePreset[] }
   | { type: "error"; message: string };
