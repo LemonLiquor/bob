@@ -293,12 +293,11 @@ export default function GameBoard({ gameState: propState, onAction, initialState
   // 拍平渲染分组：不在 pile / 手牌区的实体全部平级渲染（含版图）；牌堆全部平级渲染
   // 版图内实体/堆不再是 DOM 子节点——位置 = worldOf（parentId 链求和），跟随 = 祖先拖拽 delta
   const flatEntities = gameState.entities.filter((e) => !inContainer.has(e.id));
-  // 拖拽中的版图 id：拖版图时其全部后代（实体/堆/嵌套版图）整体抬升 + delta 跟随
-  const draggedBoardId = useMemo(() => {
-    if (!activeId) return null;
-    const e = gameState.entities.find((x) => x.id === activeId);
-    return e?.kind === "board" ? e.id : null;
-  }, [activeId, gameState]);
+  // 拖拽中的宿主实体 id（任意 kind）：拖动时其全部后代（实体/堆）同步跟随 delta
+  const draggedHostId = useMemo(() => {
+    if (!activeId || activeId.startsWith("pile-move-")) return null;
+    return activeId;
+  }, [activeId]);
 
   return (
     <main
@@ -344,17 +343,17 @@ export default function GameBoard({ gameState: propState, onAction, initialState
                 pointerEvents: "none",
               }}
             />
-            {/* 拍平实体层：位置 = worldOf + 祖先版图拖拽 delta；zIndex 全局单一维度（被拖者/被拖版图后代抬升） */}
+            {/* 拍平实体层：位置 = worldOf + 祖先拖拽 delta；zIndex 全局单一维度（被拖者及其后代抬升） */}
             {flatEntities.map((e) => {
               const w = worldOf(gameState, e);
               const follows =
-                draggedBoardId !== null &&
+                draggedHostId !== null &&
                 activeId !== e.id &&
-                ancestorChainHas(gameState, e.parentId, draggedBoardId);
+                ancestorChainHas(gameState, e.parentId, draggedHostId);
               const pos = follows
                 ? { x: w.x + dragDelta.x / view.zoom, y: w.y + dragDelta.y / view.zoom }
                 : w;
-              const baseZ = renderedZ(gameState, e);
+              const baseZ = renderedZ(gameState, e.id, e.zIndex, e.parentId);
               const z = activeId === e.id || follows ? DRAG_BASE + baseZ : baseZ;
               return e.kind === "board" ? (
                 <FlatBoard key={e.id} board={e} pos={pos} z={z} zoom={view.zoom} />
@@ -372,12 +371,12 @@ export default function GameBoard({ gameState: propState, onAction, initialState
               const selfDragging = activeId === `pile-move-${pile.id}`;
               const memberDragging = activeId !== null && pile.entityIds.includes(activeId);
               const follows =
-                draggedBoardId !== null && ancestorChainHas(gameState, pile.parentId, draggedBoardId);
+                draggedHostId !== null && ancestorChainHas(gameState, pile.parentId, draggedHostId);
               const w = worldOf(gameState, pile);
               const pos = follows
                 ? { x: w.x + dragDelta.x / view.zoom, y: w.y + dragDelta.y / view.zoom }
                 : w;
-              const baseZ = Math.max(topZ, renderedZ(gameState, { parentId: pile.parentId, zIndex: topZ }));
+              const baseZ = renderedZ(gameState, pile.id, topZ, pile.parentId);
               const z = selfDragging || memberDragging || follows ? DRAG_BASE + baseZ : baseZ || undefined;
               return (
                 <div key={pile.id} style={{ position: "absolute", left: pos.x, top: pos.y, zIndex: z }}>
@@ -436,22 +435,17 @@ function ancestorChainHas(state: GameState, startPid: string | undefined, target
 }
 
 /**
- * 渲染 z：自身 zIndex 与"每个祖先 z + 1"取大。
- * 任意实体可做宿主后，宿主每次移动 placeAt 都刷新自身 z = maxZ+1，
- * 会压过此前放置的子实体——后代（实体/堆）恒在所有祖先图面之上，这里在渲染层兜住，引擎不动
+ * 渲染 z：递归——子实体 z = max(自身 z, 父实体渲染 z + 1)。
+ * 必须用父的【渲染 z】而非原始 z：宿主移动会刷新自身 z=maxZ+1，祖先链逐级抬升，
+ * 只比原始 z 大 1 会与被抬升的父级打平（平局按 DOM 顺序画 → 子实体被父盖住）。
+ * 整条父子链渲染 z 严格递增：B < A < 卡牌 < token 恒成立
  */
-function renderedZ(state: GameState, e: { parentId?: string; zIndex: number }): number {
-  let z = e.zIndex;
-  let pid = e.parentId;
-  const seen = new Set<string>();
-  while (pid && !seen.has(pid)) {
-    seen.add(pid);
-    const p = state.entities.find((x) => x.id === pid);
-    if (!p) break;
-    z = Math.max(z, p.zIndex + 1);
-    pid = p.parentId;
-  }
-  return z;
+function renderedZ(state: GameState, id: string, rawZ: number, parentId: string | undefined): number {
+  if (!parentId) return rawZ;
+  const parent = state.entities.find((x) => x.id === parentId);
+  if (!parent) return rawZ;
+  const parentZ = renderedZ(state, parent.id, parent.zIndex, parent.parentId);
+  return Math.max(rawZ, parentZ + 1);
 }
 
 /** 平级版图：droppable 悬停高亮（放置语义由引擎 placeAt 落点判定，此处只做反馈） */
