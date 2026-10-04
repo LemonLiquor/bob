@@ -4,7 +4,6 @@ import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import {
   DndContext,
   PointerSensor,
-  KeyboardSensor,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
@@ -176,10 +175,9 @@ export default function GameBoard({ gameState: propState, onAction, initialState
     };
   }, []);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor),
-  );
+  // 仅 PointerSensor：KeyboardSensor 的 Space/Enter 会在焦点残留的牌/版图上
+  // 误触键盘拖拽（版图瞬移回原位）。键盘无障碍由 F/R/D 悬停快捷键承担
+  const sensors = useSensors(useSensor(PointerSensor));
 
   // Shift 按住/松开 → 切换整堆移动模式；失焦时重置（防止卡住）
   useEffect(() => {
@@ -305,7 +303,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
   return (
     <main
       ref={mainRef}
-      className="h-full board-surface relative overflow-hidden"
+      className="h-full board-surface relative overflow-clip"
     >
       <DndContext
         sensors={sensors}
