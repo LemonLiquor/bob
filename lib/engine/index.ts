@@ -1,7 +1,7 @@
 export type { Sprite, Prefab, GameAssets, EntityState, Pile, HandZone, Seat, GameState, GameMeta, SeatTemplate, GameAction } from "./types";
 export { applyAction, findCards } from "./reducers";
 export {
-  moveCard, moveCardToHand, moveCardFromHand, moveCardToPile, moveCardFromPile,
+  moveCard, moveCardToHand, moveCardFromHand, moveCardToPile, moveCardFromPile, movePile,
   shufflePile, flipCard, flipPile, rotateEntity, findOverlap, dropHandToTable, removeEntity,
   assignParents, worldOf,
 } from "./actions";

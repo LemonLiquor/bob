@@ -52,7 +52,7 @@ export interface EntityState {
   x: number;          // 坐标（parentId 非空 = 相对父版图容器；空 = 世界坐标/桌面坐标系）
   y: number;
   zIndex: number;     // z 序，越大越靠上（版图内为容器 SC 内比较）
-  parentId?: string;  // 父级实体 id（仅 board 可做父）：渲染进版图 DOM 容器，移动版图天然跟随。undefined = 自由（世界坐标）
+  parentId?: string;  // 父级实体 id（任意实体可做父：版图/卡牌/token 互为容器）：坐标相对父实体，移动父实体时跟随。undefined = 自由（世界坐标）
   size?: Size;        // 渲染尺寸（从 prefab 复制）；缺省 120×168 卡牌；不同尺寸不可堆叠
 }
 
