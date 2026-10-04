@@ -3,7 +3,7 @@
 // ============================================================
 
 import type { EntityState, GameAction, GameState } from "./types";
-import { moveCard, moveCardToHand, flipCard, flipPile, rotateEntity, shufflePile, movePile } from "./actions";
+import { moveCard, moveCardToHand, flipCard, flipPile, rotateEntity, shufflePile, movePile, addScore } from "./actions";
 
 /** 动作分发：纯函数，GameBoard 与服务端共用 */
 export function applyAction(state: GameState, action: GameAction): GameState {
@@ -22,6 +22,8 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       return rotateEntity(state, action.entityId);
     case "shuffle_pile":
       return shufflePile(state, action.pileId);
+    case "add_score":
+      return addScore(state, action.seatId, action.delta);
   }
 }
 

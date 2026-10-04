@@ -361,6 +361,15 @@ export function shufflePile(state: GameState, pileId: string): GameState {
   };
 }
 
+/** 座位计分：delta 可正可负（沙盒，不设上下限）。座位不存在 → 原状态。不可变更新 */
+export function addScore(state: GameState, seatId: string, delta: number): GameState {
+  if (!state.seats.some((s) => s.id === seatId)) return state;
+  return {
+    ...state,
+    seats: state.seats.map((s) => (s.id === seatId ? { ...s, score: s.score + delta } : s)),
+  };
+}
+
 /**
  * 移动整个牌堆到桌面坐标 (x, y)（x/y = 堆左上角，世界坐标）。不可变更新。
  * ① 落点命中同尺寸的另一堆 → 合并：源堆牌并入目标堆顶，源堆删除（合并不是解散）

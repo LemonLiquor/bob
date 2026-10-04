@@ -100,15 +100,34 @@ export default function RoomPanel() {
           const isMe = seat.playerId === playerIdRef.current;
           const occupied = !!seat.playerId;
           return (
-            <li key={seat.id} className="text-sm py-0.5 flex justify-between items-center">
-              <span className={isMe ? "font-bold" : ""}>
-                {seat.label} {occupied ? `👤 ${seat.playerName}` : "[空位]"}
-              </span>
-              {isMe && (
-                <button className="link-pop text-[11px] text-red-500" onClick={handleVacate}>离座</button>
-              )}
-              {!isMe && !occupied && (
-                <button className="link-pop text-[11px]" onClick={() => handleOccupy(seat.id)}>入座</button>
+            <li key={seat.id} className="text-sm py-0.5">
+              <div className="flex justify-between items-center">
+                <span className={isMe ? "font-bold" : ""}>
+                  {seat.label} {occupied ? `👤 ${seat.playerName}` : "[空位]"}
+                </span>
+                {isMe && (
+                  <button className="link-pop text-[11px] text-red-500" onClick={handleVacate}>离座</button>
+                )}
+                {!isMe && !occupied && (
+                  <button className="link-pop text-[11px]" onClick={() => handleOccupy(seat.id)}>入座</button>
+                )}
+              </div>
+              {/* 计分：沙盒语义——任何玩家可给任何座位加减（+1/+5/+10，负数用多次减？不提供，保持最小） */}
+              {occupied && (
+                <div className="flex justify-between items-center mt-0.5">
+                  <span className="text-[11px] font-mono text-secondary">分 {seat.score}</span>
+                  <div className="flex gap-1">
+                    {[1, 5, 10].map((d) => (
+                      <button
+                        key={d}
+                        className="text-[10px] leading-none px-1.5 py-1 border border-ink rounded bg-card hover:bg-secondary/30 active:translate-y-px"
+                        onClick={() => send({ type: "game_action", action: { type: "add_score", seatId: seat.id, delta: d } })}
+                      >
+                        +{d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
             </li>
           );

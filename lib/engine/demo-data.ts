@@ -17,6 +17,7 @@ export function createSeatFromTemplate(template: SeatTemplate): SeatType {
     id: `seat-${ts}`,
     index: ts,
     label: template.label,
+    score: 0,
     handZone: { entityIds: [...template.handZone.entityIds] },
   };
 }

@@ -75,6 +75,7 @@ export interface Seat {
   label: string;           // "座位1"（展示用）
   playerId?: string;       // undefined = 空位
   playerName?: string;     // 与 playerId 配对
+  score: number;           // 计分（沙盒任意加减，创建时 0；重新开始归零）
   handZone: HandZone;      // 该座位的手牌区
 }
 
@@ -104,4 +105,5 @@ export type GameAction =
   | { type: "flip_card"; cardId: string }
   | { type: "flip_pile"; pileId: string } // 翻整叠（pile 内 card faceUp 取反；token/board 单面不动）
   | { type: "rotate_entity"; entityId: string } // 顺时针旋转 90°（仅 board 生效）
-  | { type: "shuffle_pile"; pileId: string };
+  | { type: "shuffle_pile"; pileId: string }
+  | { type: "add_score"; seatId: string; delta: number }; // 座位计分（沙盒任意加减）

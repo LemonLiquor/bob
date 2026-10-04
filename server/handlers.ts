@@ -2,7 +2,7 @@ import { WebSocket } from "ws";
 import type { ClientMessage, ServerMessage } from "../lib/multiplayer/protocol";
 import { RoomManager } from "./room-manager";
 import type { GameLibrary } from "./game-library";
-import { moveCard, moveCardToHand, flipCard, flipPile, shufflePile, movePile } from "../lib/engine/actions";
+import { applyAction } from "../lib/engine";
 
 // ============================================================
 // 消息分发 — 解析客户端消息，调用 RoomManager 并回复/广播
@@ -94,26 +94,8 @@ export function handleMessage(
 
       let newState = state;
       const { action } = parsed;
-      switch (action.type) {
-        case "move_card":
-          newState = moveCard(state, action.cardId, action.x, action.y);
-          break;
-        case "move_pile":
-          newState = movePile(state, action.pileId, action.x, action.y);
-          break;
-        case "move_to_hand":
-          newState = moveCardToHand(state, action.cardId, action.seatId);
-          break;
-        case "flip_card":
-          newState = flipCard(state, action.cardId);
-          break;
-        case "flip_pile":
-          newState = flipPile(state, action.pileId);
-          break;
-        case "shuffle_pile":
-          newState = shufflePile(state, action.pileId);
-          break;
-      }
+      // 动作注册表统一分发（与客户端共用一份 reducer），服务端顺序应用即权威
+      newState = applyAction(state, action);
 
       if (newState !== state) {
         roomManager.updateGameState(ws, newState);

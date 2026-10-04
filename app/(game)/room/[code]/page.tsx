@@ -60,13 +60,13 @@ export default function RoomPage() {
   }, []);
 
   // ESC 面板：重新开始（仅房主）→ 回无座 initialState（坐标原样），
-  // 座位保留实例与归属、仅清空手牌（玩家无需重新占座）→ 广播
+  // 座位保留实例与归属、清空手牌、计分归零（新一局）→ 广播
   const handleRestart = useCallback(() => {
     const init = initialStateRef.current;
     if (!init) return;
     const state: GameState = {
       ...init,
-      seats: (gameState?.seats ?? []).map((s) => ({ ...s, handZone: { entityIds: [] } })),
+      seats: (gameState?.seats ?? []).map((s) => ({ ...s, score: 0, handZone: { entityIds: [] } })),
     };
     send({ type: "update_game_state", state });
   }, [gameState]);
