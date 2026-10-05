@@ -13,7 +13,7 @@ import Pile from "@/components/game/Pile";
 import Card from "@/components/game/Card";
 import HandZone from "@/components/game/HandZone";
 import OtherHandBar from "@/components/game/OtherHandBar";
-import { applyAction, createSeat, findCards, assignParents, worldOf } from "@/lib/engine";
+import { applyAction, createSeat, findCards, assignParents, worldOf, deriveScene } from "@/lib/engine";
 import { CardActionProvider } from "@/lib/engine/card-action";
 import type { GameAction, GameState, EntityState } from "@/lib/engine";
 import { sessionStore } from "@/lib/multiplayer/session";
@@ -282,22 +282,11 @@ export default function GameBoard({ gameState: propState, onAction, initialState
     }
   }
 
-  // 自由牌 = 不在任何 pile / 手牌区
-  const inContainer = useMemo(() => {
-    const set = new Set<string>();
-    for (const p of gameState.piles) for (const id of p.entityIds) set.add(id);
-    for (const s of gameState.seats) for (const id of s.handZone.entityIds) set.add(id);
-    return set;
-  }, [gameState]);
-
-  // 拍平渲染分组：不在 pile / 手牌区的实体全部平级渲染（含版图）；牌堆全部平级渲染
-  // 版图内实体/堆不再是 DOM 子节点——位置 = worldOf（parentId 链求和），跟随 = 祖先拖拽 delta
-  const flatEntities = gameState.entities.filter((e) => !inContainer.has(e.id));
-  // 拖拽中的宿主实体 id（任意 kind）：拖动时其全部后代（实体/堆）同步跟随 delta
-  const draggedHostId = useMemo(() => {
-    if (!activeId || activeId.startsWith("pile-move-")) return null;
-    return activeId;
-  }, [activeId]);
+  // 场景派生：位置/z 序/跟随/成员资格的全部不变量集中在 deriveScene（lib/engine/scene.ts）
+  const scene = useMemo(
+    () => deriveScene(gameState, { activeId, delta: dragDelta, zoom: view.zoom }),
+    [gameState, activeId, dragDelta, view.zoom],
+  );
 
   return (
     <main
@@ -343,54 +332,30 @@ export default function GameBoard({ gameState: propState, onAction, initialState
                 pointerEvents: "none",
               }}
             />
-            {/* 拍平实体层：位置 = worldOf + 祖先拖拽 delta；zIndex 全局单一维度（被拖者及其后代抬升） */}
-            {flatEntities.map((e) => {
-              const w = worldOf(gameState, e);
-              const follows =
-                draggedHostId !== null &&
-                activeId !== e.id &&
-                ancestorChainHas(gameState, e.parentId, draggedHostId);
-              const pos = follows
-                ? { x: w.x + dragDelta.x / view.zoom, y: w.y + dragDelta.y / view.zoom }
-                : w;
-              const baseZ = renderedZ(gameState, e.id, e.zIndex, e.parentId);
-              const z = activeId === e.id || follows ? DRAG_BASE + baseZ : baseZ;
-              return e.kind === "board" ? (
-                <FlatBoard key={e.id} board={e} pos={pos} z={z} zoom={view.zoom} />
+            {/* 平铺实体层：坐标与 z 全部来自场景派生（lib/engine/scene.ts） */}
+            {scene.entities.map((s) =>
+              s.entity.kind === "board" ? (
+                <FlatBoard key={s.id} board={s.entity} pos={{ x: s.x, y: s.y }} z={s.z} zoom={view.zoom} />
               ) : (
-                <div key={e.id} style={{ position: "absolute", left: pos.x, top: pos.y, zIndex: z }}>
-                  <Card card={e} draggable zoom={view.zoom} />
+                <div key={s.id} style={{ position: "absolute", left: s.x, top: s.y, zIndex: s.z }}>
+                  <Card card={s.entity} draggable zoom={view.zoom} />
                 </div>
-              );
-            })}
+              ),
+            )}
 
-            {/* 拍平牌堆层：定位/层级同实体；堆内牌渲染在 Pile 内部（自包含单元，无需逃逸） */}
-            {gameState.piles.map((pile) => {
-              const cards = findCards(gameState, pile.entityIds);
-              const topZ = cards.reduce((m, c) => Math.max(m, c.zIndex), 0);
-              const selfDragging = activeId === `pile-move-${pile.id}`;
-              const memberDragging = activeId !== null && pile.entityIds.includes(activeId);
-              const follows =
-                draggedHostId !== null && ancestorChainHas(gameState, pile.parentId, draggedHostId);
-              const w = worldOf(gameState, pile);
-              const pos = follows
-                ? { x: w.x + dragDelta.x / view.zoom, y: w.y + dragDelta.y / view.zoom }
-                : w;
-              const baseZ = renderedZ(gameState, pile.id, topZ, pile.parentId);
-              const z = selfDragging || memberDragging || follows ? DRAG_BASE + baseZ : baseZ || undefined;
-              return (
-                <div key={pile.id} style={{ position: "absolute", left: pos.x, top: pos.y, zIndex: z }}>
-                  <Pile
-                    pile={pile}
-                    cards={cards}
-                    onShuffle={handleShufflePile}
-                    onFlipPile={handleFlipPile}
-                    shiftHeld={shiftHeld}
-                    zoom={view.zoom}
-                  />
-                </div>
-              );
-            })}
+            {/* 平铺牌堆层：堆内牌渲染在 Pile 内部（自包含单元，无需逃逸） */}
+            {scene.piles.map((s) => (
+              <div key={s.id} style={{ position: "absolute", left: s.x, top: s.y, zIndex: s.z || undefined }}>
+                <Pile
+                  pile={s.pile}
+                  cards={findCards(gameState, s.pile.entityIds)}
+                  onShuffle={handleShufflePile}
+                  onFlipPile={handleFlipPile}
+                  shiftHeld={shiftHeld}
+                  zoom={view.zoom}
+                />
+              </div>
+            ))}
           </div>
 
           {/* 自己的手牌区（屏幕底部，spread 展开） */}
@@ -413,40 +378,10 @@ export default function GameBoard({ gameState: propState, onAction, initialState
 }
 
 // ============================================================
-// 拍平渲染辅助 — z 序全局单一维度
-// 引擎 placeAt 的 z = maxZ+1（全局单调）→ 实体 zIndex 直接可信；
-// 渲染不嵌套层叠上下文，"容器成员被裹挟沉底"类 z 序问题从结构上消除。
-// 版图跟随：后代位置 = worldOf + 被拖版图 dragDelta（UI 层唯一换算点）。
+// 拍平渲染辅助
+// 位置 / z 序 / 跟随的不变量全部在 lib/engine/scene.ts 的 deriveScene，
+// 此处只剩渲染组件（FlatBoard = droppable 悬停高亮的载体）。
 // ============================================================
-
-/** 拖拽置顶基准：远高于常规 zIndex（每次放置 +1，会话内百次量级） */
-const DRAG_BASE = 100000;
-
-/** parentId 链是否经过 targetId（环保护）。牌堆归属链同样适用（pile.parentId → 版图链） */
-function ancestorChainHas(state: GameState, startPid: string | undefined, targetId: string): boolean {
-  let pid = startPid;
-  const seen = new Set<string>();
-  while (pid && !seen.has(pid)) {
-    if (pid === targetId) return true;
-    seen.add(pid);
-    pid = state.entities.find((e) => e.id === pid)?.parentId;
-  }
-  return false;
-}
-
-/**
- * 渲染 z：递归——子实体 z = max(自身 z, 父实体渲染 z + 1)。
- * 必须用父的【渲染 z】而非原始 z：宿主移动会刷新自身 z=maxZ+1，祖先链逐级抬升，
- * 只比原始 z 大 1 会与被抬升的父级打平（平局按 DOM 顺序画 → 子实体被父盖住）。
- * 整条父子链渲染 z 严格递增：B < A < 卡牌 < token 恒成立
- */
-function renderedZ(state: GameState, id: string, rawZ: number, parentId: string | undefined): number {
-  if (!parentId) return rawZ;
-  const parent = state.entities.find((x) => x.id === parentId);
-  if (!parent) return rawZ;
-  const parentZ = renderedZ(state, parent.id, parent.zIndex, parent.parentId);
-  return Math.max(rawZ, parentZ + 1);
-}
 
 /** 平级版图：droppable 悬停高亮（放置语义由引擎 placeAt 落点判定，此处只做反馈） */
 function FlatBoard({ board, pos, z, zoom }: { board: EntityState; pos: { x: number; y: number }; z: number; zoom: number }) {

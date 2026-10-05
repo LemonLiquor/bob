@@ -3,6 +3,24 @@
 > 记录决定了什么 + 否决了什么，**与代码保持同步**（代码改名/移动时同步更新事实）。
 > 单文件多条目，小项目不建目录；条目按日期倒序。
 
+## 场景派生层：deriveScene 纯函数集中位置/z 序/跟随不变量
+
+- **日期**：2026-10-05（首次提出）
+- **主题**：渲染拍平后 z 序/跟随类 bug 三连（z 打平、跟随只对版图、环爆栈）——根源是派生状态散在渲染层、不变量不闭合。架构目标态"引擎输出场景描述"的第一块实地
+
+**决定了什么**：
+
+- **`lib/engine/scene.ts` → `deriveScene(state, dragCtx)`**：输入 GameState + DragContext { activeId, delta, zoom }（纯数据），输出 Scene { entities, piles }（每个实体/堆的世界坐标、渲染 z、dragging 标记、原始引用）。GameBoard 只消费 Scene，删除约 60 行临时推导（renderedZ / ancestorChainHas / draggedHostId / inContainer / DRAG_BASE 全部迁入）
+- **四条不变量集中定义**：① 位置 = worldOf 链求和 + 被拖子树 delta/zoom；② z = max(自身原始 z, 父渲染 z + 1)（memo + 进行中集合防坏链成环爆栈——测试中新增发现的）；③ 堆成员/手牌实体不入平铺层；④ 跟随泛化任意 kind（被拖者自身吃 dnd transform，后代吃 delta/zoom）；堆 z = max(topZ, 父渲染 z + 1)，整堆/成员拖拽抬 DRAG_BASE
+- **DRAG_BASE 迁入 scene.ts** 并从 barrel 导出；**tsx 常驻断言思路确立**——本周每个 bug 场景固化为派生层测试（环防护即测试中新增发现的）
+
+**否决了什么**：
+
+- **放渲染层（components/game/scene.ts）**：可测试性优先，engine 零 UI 依赖不破（dragCtx 是纯数据参数）
+- **本次顺做 memo 化/虚拟化/可视区裁剪**：属于"大桌游性能"todo，派生层是其地基但不预建
+
+**验证**：16 项 tsx 断言全过（z 链严格递增/跟随/抬升/成员资格/环防护/zoom 缩放）；重构前后浏览器逐像素一致（同 id 实体坐标与 z 完全相等）；拖放接线正常。注：不含预设分支依赖（两分支并行，合并无冲突）
+
 ## 统一端口：custom server 单进程单端口（Next 页面 + ws）
 
 - **日期**：2026-10-04（首次提出）
