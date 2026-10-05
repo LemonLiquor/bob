@@ -2,7 +2,8 @@ import { WebSocket } from "ws";
 import type { ClientMessage, ServerMessage } from "../lib/multiplayer/protocol";
 import { RoomManager } from "./room-manager";
 import type { GameLibrary } from "./game-library";
-import { applyAction } from "../lib/engine";
+import { applyAction, dropHandToTable } from "../lib/engine";
+import type { GamePreset, GameState } from "../lib/engine/types";
 
 // ============================================================
 // 消息分发 — 解析客户端消息，调用 RoomManager 并回复/广播
@@ -142,6 +143,64 @@ export function handleMessage(
       }
       const room = roomManager.findRoom(ws)!;
       broadcast(room, { type: "state_sync", state });
+      break;
+    }
+
+    case "save_preset": {
+      const room = roomManager.findRoom(ws);
+      const player = room ? room.players.get(ws) : undefined;
+      if (!room || !player || player.id !== room.creatorId) {
+        send(ws, { type: "error", message: "仅房主可保存预设" });
+        return;
+      }
+      const state = roomManager.getGameState(ws);
+      if (!room.gameId || !state) {
+        send(ws, { type: "error", message: "无法保存预设（房间无桌游）" });
+        return;
+      }
+      // 预设 = 桌面快照：手牌全部退回桌面（无座语义），座位/计分不入快照
+      let dropped = state;
+      for (const s of state.seats) dropped = dropHandToTable(dropped, s.id);
+      const preset: GamePreset = {
+        id: `preset-${Date.now()}`,
+        name: parsed.name,
+        state: { entities: dropped.entities, piles: dropped.piles },
+      };
+      if (!gameLibrary.savePreset(room.gameId, preset)) {
+        send(ws, { type: "error", message: "保存预设失败（桌游不存在）" });
+        return;
+      }
+      broadcast(room, { type: "presets_list", presets: gameLibrary.listPresets(room.gameId) });
+      break;
+    }
+
+    case "load_preset": {
+      const room = roomManager.findRoom(ws);
+      const player = room ? room.players.get(ws) : undefined;
+      if (!room || !player || player.id !== room.creatorId) {
+        send(ws, { type: "error", message: "仅房主可加载预设" });
+        return;
+      }
+      const state = roomManager.getGameState(ws);
+      const preset = gameLibrary.getGame(room.gameId ?? "")?.presets?.find((p) => p.id === parsed.presetId);
+      if (!state || !preset) {
+        send(ws, { type: "error", message: "预设不存在" });
+        return;
+      }
+      // 加载与重新开始同构：桌面换为预设快照；座位保留实例与归属、清手牌、计分归零
+      const newState: GameState = {
+        entities: structuredClone(preset.state.entities),
+        piles: structuredClone(preset.state.piles),
+        seats: state.seats.map((s) => ({ ...s, handZone: { entityIds: [] }, score: 0 })),
+      };
+      roomManager.updateGameState(ws, newState);
+      broadcast(roomManager.findRoom(ws)!, { type: "state_sync", state: newState });
+      break;
+    }
+
+    case "list_presets": {
+      const room = roomManager.findRoom(ws);
+      send(ws, { type: "presets_list", presets: room?.gameId ? gameLibrary.listPresets(room.gameId) : [] });
       break;
     }
 
