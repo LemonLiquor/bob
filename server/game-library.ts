@@ -94,6 +94,18 @@ export class GameLibrary {
     return this.games.get(gameId)?.presets ?? [];
   }
 
+  /** 删除预设（就地更新 json 文件）。桌游或预设不存在 → false */
+  deletePreset(gameId: string, presetId: string): boolean {
+    const game = this.games.get(gameId);
+    if (!game || !game.presets?.some((p) => p.id === presetId)) return false;
+    game.presets = game.presets.filter((p) => p.id !== presetId);
+    game.updatedAt = Date.now();
+    const file = path.join(DATA_DIR, `${gameId}.json`);
+    fs.writeFileSync(file, JSON.stringify(game, null, 2));
+    console.log(`[lib] preset deleted: ${presetId} → ${gameId} (${game.presets.length} presets)`);
+    return true;
+  }
+
   listGames(): GameInfo[] {
     return Array.from(this.games.values()).map((g) => ({
       id: g.meta.id,

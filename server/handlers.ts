@@ -204,6 +204,21 @@ export function handleMessage(
       break;
     }
 
+    case "delete_preset": {
+      const room = roomManager.findRoom(ws);
+      const player = room ? room.players.get(ws) : undefined;
+      if (!room || !player || player.id !== room.creatorId) {
+        send(ws, { type: "error", message: "仅房主可删除预设" });
+        return;
+      }
+      if (!room.gameId || !gameLibrary.deletePreset(room.gameId, parsed.presetId)) {
+        send(ws, { type: "error", message: "预设不存在" });
+        return;
+      }
+      broadcast(room, { type: "presets_list", presets: gameLibrary.listPresets(room.gameId) });
+      break;
+    }
+
     case "upload_game": {
       const now = Date.now();
       const ok = gameLibrary.saveGame({

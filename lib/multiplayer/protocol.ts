@@ -28,6 +28,7 @@ export type ClientMessage =
   | { type: "vacate_seat" }
   | { type: "save_preset"; name: string } // 仅房主：当前桌面存为预设（手牌退回桌面）
   | { type: "load_preset"; presetId: string } // 仅房主：加载预设（保留座位、清手牌、计分归零）
+  | { type: "delete_preset"; presetId: string } // 仅房主：删除预设
   | { type: "list_presets" };
 
 // --- Server → Client ---

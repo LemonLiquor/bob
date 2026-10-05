@@ -39,6 +39,8 @@ export default function GameControlPanel({
   const [presetName, setPresetName] = useState("");
   const [loadConfirmId, setLoadConfirmId] = useState<string | null>(null);
   const loadConfirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const deleteConfirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ESC 呼出 / 关闭
   useEffect(() => {
@@ -110,6 +112,21 @@ export default function GameControlPanel({
     }
   }
 
+  function handleDeleteClick(presetId: string) {
+    if (!isCreator) return;
+    if (deleteConfirmId === presetId) {
+      setDeleteConfirmId(null);
+      if (deleteConfirmTimer.current) {
+        clearTimeout(deleteConfirmTimer.current);
+        deleteConfirmTimer.current = null;
+      }
+      send({ type: "delete_preset", presetId });
+    } else {
+      setDeleteConfirmId(presetId);
+      deleteConfirmTimer.current = setTimeout(() => setDeleteConfirmId(null), 5000);
+    }
+  }
+
   if (!open) return null;
 
   return (
@@ -175,13 +192,21 @@ export default function GameControlPanel({
             ) : (
               <ul className="mt-2 flex flex-col gap-1 max-h-[160px] overflow-y-auto">
                 {presets.map((p) => (
-                  <li key={p.id}>
+                  <li key={p.id} className="flex gap-1 items-stretch">
                     <button
-                      className={`w-full text-left text-xs px-2 py-1 border rounded ${loadConfirmId === p.id ? "border-red-500 bg-red-500/10" : "border-ink bg-card hover:bg-secondary/30 active:translate-y-px"}`}
+                      className={`flex-1 min-w-0 text-left text-xs px-2 py-1 border rounded truncate ${loadConfirmId === p.id ? "border-red-500 bg-red-500/10" : "border-ink bg-card hover:bg-secondary/30 active:translate-y-px"}`}
                       onClick={() => handleLoadClick(p.id)}
                       disabled={!isCreator}
                     >
                       {loadConfirmId === p.id ? "再点一次确认加载（覆盖当前桌面）" : `▸ ${p.name}`}
+                    </button>
+                    <button
+                      className={`text-xs px-1.5 border rounded shrink-0 ${deleteConfirmId === p.id ? "border-red-500 bg-red-500/10 text-red-500" : "border-ink bg-card text-muted hover:bg-red-500/10 active:translate-y-px"}`}
+                      title="删除预设"
+                      onClick={() => handleDeleteClick(p.id)}
+                      disabled={!isCreator}
+                    >
+                      {deleteConfirmId === p.id ? "确认?" : "✕"}
                     </button>
                   </li>
                 ))}
