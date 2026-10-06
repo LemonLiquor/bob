@@ -41,8 +41,13 @@ export interface TtsBuildResult {
   };
 }
 
-/** 标定常量：TTS 单位 → BOB px（标准卡宽 2.2 单位 ≈ 120px，可按实测微调） */
-const TTS_UNIT_PX = 55;
+// 基线标定（用户定）：掉落牌堆的卡（TTS 标准卡网格 2.5×3.5 × scale 1.4）= BOB 标准卡 120×168
+// → K = 120 / (2.5×1.4) ≈ 34.29 px/单位；其他组件尺寸 = TTS 单位 × K × 各自 scale
+const TTS_UNIT_PX = 120 / 3.5; // ≈ 34.29
+const CARD_UNITS = { w: 2.5, h: 3.5 }; // TTS 标准卡网格
+const PLANE_UNITS = 2; // Custom_Token/Tile 默认平面网格（假设 2×2，实测可调）
+const DIE_UNITS = 0.75; // 标准骰网格
+const MIN_SIDE = 32; // 非卡实体最小边（过小不可点）
 /** 无限袋内容复制倍数（"无限补给"的实用近似） */
 const INFINITE_BAG_MULTIPLY = 5;
 const COUNTER_SIDES = 20; // 计数器数字范围（±1 调整，die 原语承载）
@@ -110,6 +115,10 @@ export async function buildTtsGame(
     if (!faceMeta.has(faceKey)) {
       faceMeta.set(faceKey, { cols: atlas.NumWidth ?? 1, rows: atlas.NumHeight ?? 1, backKey });
       if (backKey) neededCells.set(backKey, new Set());
+    }
+    // 卡背图集也登记网格（修复：此前 back key 无 meta → 按 1×1 切 → 只有 0 号格有卡背）
+    if (backKey && !faceMeta.has(backKey)) {
+      faceMeta.set(backKey, atlas.UniqueBack ? { cols: 1, rows: 1 } : { cols: atlas.NumWidth ?? 1, rows: atlas.NumHeight ?? 1 });
     }
     const meta = faceMeta.get(faceKey)!;
     if (cell >= meta.cols * meta.rows) {
@@ -185,7 +194,7 @@ export async function buildTtsGame(
     rotation: asRotation(t?.rotY ?? 0),
   });
 
-  const ensureCardPrefab = (faceKey: string, cell: number): Prefab | undefined => {
+  const ensureCardPrefab = (faceKey: string, cell: number, scaleX: number, scaleZ: number): Prefab | undefined => {
     const k = `${faceKey}#${cell}`;
     const existing = cardPrefabByCell.get(k);
     if (existing) return existing;
@@ -193,12 +202,14 @@ export async function buildTtsGame(
     if (!front) return undefined;
     const meta = faceMeta.get(faceKey)!;
     const back = meta.backKey ? spriteByCell.get(`${meta.backKey}#${cell}`) : undefined;
-    const aspect = meta.rows / meta.cols;
     const prefab: Prefab = {
       kind: "card",
       id: `prefab-tts-${prefabs.length}`,
       faces: { front: front.id, back: back?.id ?? "" },
-      size: { width: 120, height: Math.round(120 * aspect) || 168 },
+      size: {
+        width: Math.round(CARD_UNITS.w * scaleX * TTS_UNIT_PX),
+        height: Math.round(CARD_UNITS.h * scaleZ * TTS_UNIT_PX),
+      },
     };
     prefabs.push(prefab);
     cardPrefabByCell.set(k, prefab);
@@ -213,7 +224,8 @@ export async function buildTtsGame(
     const faceKey = registerCardCells(card, fallbackHost);
     if (!faceKey) return undefined;
     const cell = (card.CardID as number) - Math.floor((card.CardID as number) / 100) * 100;
-    const prefab = ensureCardPrefab(faceKey, cell);
+    const t = card.Transform;
+    const prefab = ensureCardPrefab(faceKey, cell, t?.scaleX ?? 1, t?.scaleZ ?? 1);
     if (!prefab) return undefined;
     const entity: EntityState = {
       id: `inst-tts-${entities.length}`,
@@ -224,6 +236,7 @@ export async function buildTtsGame(
       x: pos.x,
       y: pos.y,
       zIndex: pos.z,
+      size: prefab.size, // BOB 约定：构建时复制到实体（堆叠判定/渲染用）
     };
     entities.push(entity);
     return entity;
@@ -235,11 +248,14 @@ export async function buildTtsGame(
     const sprite = spriteByCell.get(`${key}#0`);
     const src = deps.images.get(key);
     if (!sprite || !src) return undefined;
+    const t = o.Transform;
+    const w0 = Math.max(MIN_SIDE, Math.round(PLANE_UNITS * (t?.scaleX ?? 1) * TTS_UNIT_PX));
+    const h0 = Math.max(MIN_SIDE, Math.round(PLANE_UNITS * (t?.scaleZ ?? 1) * TTS_UNIT_PX));
     const prefab: Prefab = {
       kind: "token",
       id: `prefab-tts-${prefabs.length}`,
       faces: { front: sprite.id },
-      size: { width: Math.round(src.width / 4), height: Math.round(src.height / 4) },
+      size: { width: w0, height: h0 },
     };
     prefabs.push(prefab);
     const entity: EntityState = {
@@ -261,7 +277,9 @@ export async function buildTtsGame(
     const name = o.Name ?? "";
     const sides = name === "Die_8" ? 8 : name === "Counter" ? COUNTER_SIDES : 6;
     const count = typeof (o as { Count?: number }).Count === "number" ? (o as { Count: number }).Count : 1;
-    const prefab: Prefab = { kind: "die", id: `prefab-tts-${prefabs.length}`, sides, size: { width: 56, height: 56 } };
+    const t = o.Transform;
+    const d0 = Math.max(MIN_SIDE, Math.round(DIE_UNITS * (t?.scaleX ?? 1) * TTS_UNIT_PX));
+    const prefab: Prefab = { kind: "die", id: `prefab-tts-${prefabs.length}`, sides, size: { width: d0, height: d0 } };
     prefabs.push(prefab);
     const entity: EntityState = {
       id: `inst-tts-${entities.length}`,
