@@ -18,6 +18,7 @@ interface LabEscMenuProps {
   onUpload: () => void;
   onImport: () => void;
   onImportGame: () => void;
+  onImportTts: () => void;
   onDraw: () => void;
   onDiscard: () => void;
   onExit: () => void;
@@ -32,6 +33,7 @@ export default function LabEscMenu({
   onUpload,
   onImport,
   onImportGame,
+  onImportTts,
   onDraw,
   onDiscard,
   onExit,
@@ -75,6 +77,9 @@ export default function LabEscMenu({
           </button>
           <button className="btn-ghost w-full text-sm" onClick={closeAnd(onImportGame)}>
             导入桌游
+          </button>
+          <button className="btn-ghost w-full text-sm" onClick={closeAnd(onImportTts)}>
+            导入 TTS 图包
           </button>
           <button className="btn-ghost w-full text-sm" onClick={closeAnd(onDraw)}>
             手绘实体

@@ -14,6 +14,8 @@ import LabEscMenu from "@/components/game/LabEscMenu";
 import ImportGameModal from "@/components/game/ImportGameModal";
 import ImportFlow from "@/components/import/ImportFlow";
 import DrawEntityModal from "@/components/import/DrawEntityModal";
+import TtsImportModal from "@/components/import/TtsImportModal";
+import type { TtsBuildResult } from "@/lib/tts/build";
 
 // ============================================================
 // Lab — 桌游组装工作台（主视图）
@@ -53,6 +55,7 @@ export default function LabPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [importGameOpen, setImportGameOpen] = useState(false); // 导入现有桌游弹窗
   const [drawOpen, setDrawOpen] = useState(false); // 手绘实体弹窗
+  const [ttsOpen, setTtsOpen] = useState(false); // TTS 图包导入弹窗
   const [name, setName] = useState(""); // 桌游名（首次导入取 PDF 名，切片 4 保存时使用）
   const [sprites, setSprites] = useState<Sprite[]>([]); // 全量累积（跨 PDF）
   const [prefabs, setPrefabs] = useState<Prefab[]>([]); // 全量累积
@@ -143,6 +146,64 @@ export default function LabPage() {
   /** Lab 动作入口：应用动作（落点/坐标由引擎与 GameBoard 保证语义一致） */
   function handleLabAction(action: GameAction) {
     setLabState((prev) => applyAction(prev, action));
+  }
+
+  /** TTS 导入提交：id 重映射（防多批次撞号）→ 保留 TTS 布局（工作区非空则整体右移 1200）→ 合并 */
+  function handleTtsCommit(result: TtsBuildResult, saveName: string) {
+    if (!name.trim()) setName(saveName);
+    if (!gameIdRef.current) gameIdRef.current = result.meta.id;
+    const sOff = spriteCounterRef.current;
+    const eOff = entityCounterRef.current;
+    const pOff = pileCounterRef.current;
+    // 重映射表：旧 tts id → 新全局序号 id
+    const spriteMap = new Map<string, string>();
+    const sprites = result.assets.sprites.map((s, i) => {
+      const id = `spr-${sOff + i}`;
+      spriteMap.set(s.id, id);
+      return { ...s, id };
+    });
+    const prefabMap = new Map<string, string>();
+    const prefabs = result.assets.prefabs.map((p, i) => {
+      const id = `prefab-${eOff + i}`;
+      prefabMap.set(p.id, id);
+      const faces = "faces" in p ? { front: spriteMap.get(p.faces.front) ?? "", back: "back" in p ? spriteMap.get((p as { faces: { back: string } }).faces.back ?? "") ?? "" : undefined } : undefined;
+      return ("faces" in p ? { ...p, id, faces } : { ...p, id }) as Prefab;
+    });
+    const instMap = new Map<string, string>();
+    const entities = result.initialState.entities.map((e, i) => {
+      const id = `inst-${eOff + i}`;
+      instMap.set(e.id, id);
+      return { ...e, id, prefabId: prefabMap.get(e.prefabId) ?? e.prefabId };
+    });
+    const pileMap = new Map<string, string>();
+    const piles = result.initialState.piles.map((p, i) => {
+      const id = `pile-${pOff + i}`;
+      pileMap.set(p.id, id);
+      return {
+        ...p,
+        id,
+        entityIds: p.entityIds.map((eid) => instMap.get(eid) ?? eid),
+        parentId: p.parentId ? instMap.get(p.parentId) : p.parentId,
+      };
+    });
+    for (const e of entities) {
+      if (e.parentId) e.parentId = instMap.get(e.parentId) ?? e.parentId;
+    }
+    entityCounterRef.current += entities.length;
+    pileCounterRef.current += piles.length;
+    spriteCounterRef.current += sprites.length;
+    // 工作区非空 → 整批右移 1200 防重叠（TTS 坐标是桌面绝对语义）
+    const shift = labState.entities.length > 0 || labState.piles.length > 0 ? 1200 : 0;
+    const placedEntities = entities.map((e) => ({ ...e, x: e.x + shift }));
+    const placedPiles = piles.map((p) => ({ ...p, x: p.x + shift }));
+    setSprites((prev) => [...prev, ...sprites]);
+    setPrefabs((prev) => [...prev, ...prefabs]);
+    setAssets({ sprites: [...sprites, ...sprites], prefabs: [...prefabs, ...prefabs] });
+    setLabState((prev) => ({
+      ...prev,
+      entities: [...prev.entities, ...placedEntities],
+      piles: [...prev.piles, ...placedPiles],
+    }));
   }
 
   /** 导入提交：摊平（id 从全局计数器续）→ 网格摆位 → 合并工作区 */
@@ -344,11 +405,12 @@ export default function LabPage() {
         empty={empty}
         uploading={uploading}
         restored={restored}
-        disabled={importOpen || uploadOpen || importGameOpen || drawOpen}
+        disabled={importOpen || uploadOpen || importGameOpen || drawOpen || ttsOpen}
         onSave={handleSave}
         onUpload={handleUpload}
         onImport={() => setImportOpen(true)}
         onImportGame={() => setImportGameOpen(true)}
+        onImportTts={() => setTtsOpen(true)}
         onDraw={() => setDrawOpen(true)}
         onDiscard={handleDiscardDraft}
         onExit={() => router.push("/games")}
@@ -391,6 +453,13 @@ export default function LabPage() {
       {/* 手绘实体弹窗 */}
       {drawOpen && (
         <DrawEntityModal onClose={() => setDrawOpen(false)} onCreate={handleDrawCreate} />
+      )}
+      {/* TTS 图包导入弹窗 */}
+      {ttsOpen && (
+        <TtsImportModal
+          onClose={() => setTtsOpen(false)}
+          onCommit={handleTtsCommit}
+        />
       )}
       {/* 导入现有桌游弹窗：选择 + 两段确认（替换工作区） */}
       {importGameOpen && (
