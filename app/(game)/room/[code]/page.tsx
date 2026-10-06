@@ -90,6 +90,7 @@ export default function RoomPage() {
         onRestart={handleRestart}
         onExit={handleExit}
         exitLabel="退出房间"
+        presetsEnabled
       />
     </>
   );

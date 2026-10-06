@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import type { GameAssets, GameState } from "../lib/engine/types";
+import type { GameAssets, GameState, GamePreset } from "../lib/engine/types";
 import { pruneUnusedAssets } from "../lib/engine/prune-assets";
 import type { GameInfo } from "../lib/multiplayer/protocol";
 
@@ -8,6 +8,7 @@ import type { GameInfo } from "../lib/multiplayer/protocol";
 // GameLibrary — 桌游库（持久化）
 // 桌游 = 元数据（id/name/icon）+ 资产（sprites 图片表 + prefabs 模板表）
 //      + 无座初始状态（initialState，坐标由导入页 Lab 自定义）
+//      + 预设（presets，对局中保存的桌面快照，可选）
 // 存 server/data/games/<gameId>.json，跨重启存活。
 // ============================================================
 
@@ -17,6 +18,7 @@ export interface SavedGame {
   meta: { id: string; name: string; icon: string };
   assets: GameAssets; // sprites（图片表）+ prefabs（模板表）
   initialState: GameState; // 无座（seats: []），创建房间/试玩直接使用
+  presets?: GamePreset[]; // 对局中保存的桌面快照（旧存档无此字段 = 空列表）
   createdAt: number;
   updatedAt: number;
 }
@@ -70,6 +72,38 @@ export class GameLibrary {
 
   getGame(gameId: string): SavedGame | null {
     return this.games.get(gameId) ?? null;
+  }
+
+  /**
+   * 追加预设到桌游（就地更新 json 文件；与 saveGame 的"禁止覆盖"无关——
+   * 预设只增不改，重名允许共存，由 UI 展示区分）。
+   * 桌游不存在 → false；预设内容不清洗（实体引用的资产必然已入库）
+   */
+  savePreset(gameId: string, preset: GamePreset): boolean {
+    const game = this.games.get(gameId);
+    if (!game) return false;
+    game.presets = [...(game.presets ?? []), preset];
+    game.updatedAt = Date.now();
+    const file = path.join(DATA_DIR, `${gameId}.json`);
+    fs.writeFileSync(file, JSON.stringify(game, null, 2));
+    console.log(`[lib] preset saved: ${preset.name} → ${gameId} (${game.presets.length} presets)`);
+    return true;
+  }
+
+  listPresets(gameId: string): GamePreset[] {
+    return this.games.get(gameId)?.presets ?? [];
+  }
+
+  /** 删除预设（就地更新 json 文件）。桌游或预设不存在 → false */
+  deletePreset(gameId: string, presetId: string): boolean {
+    const game = this.games.get(gameId);
+    if (!game || !game.presets?.some((p) => p.id === presetId)) return false;
+    game.presets = game.presets.filter((p) => p.id !== presetId);
+    game.updatedAt = Date.now();
+    const file = path.join(DATA_DIR, `${gameId}.json`);
+    fs.writeFileSync(file, JSON.stringify(game, null, 2));
+    console.log(`[lib] preset deleted: ${presetId} → ${gameId} (${game.presets.length} presets)`);
+    return true;
   }
 
   listGames(): GameInfo[] {

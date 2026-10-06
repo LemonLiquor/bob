@@ -90,6 +90,13 @@ export interface GameState {
   seats: Seat[];           // 座位列表
 }
 
+/** 桌游预设：对局中保存的桌面快照（无座；手牌已退回桌面）。存入桌游包，跨房间加载 */
+export interface GamePreset {
+  id: string;              // "preset-<ts>"
+  name: string;
+  state: { entities: EntityState[]; piles: Pile[] };
+}
+
 export interface GameMeta {
   id: string;              // "pnp-<ts>"
   name: string;            // 游戏名
