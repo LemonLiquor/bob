@@ -15,6 +15,7 @@ export function pruneUnusedAssets(assets: GameAssets, entities: EntityState[]): 
 
   const usedSpriteIds = new Set<string>();
   for (const p of prefabs) {
+    if (p.kind === "die") continue; // die 无图：不引用 sprite
     for (const v of Object.values(p.faces)) {
       if (v) usedSpriteIds.add(v);
     }

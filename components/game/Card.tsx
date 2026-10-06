@@ -84,8 +84,12 @@ export default function Card({ card, children, draggable = false, zoom = 1 }: Ca
       style={cardStyle}
       {...hoverProps}
     >
-      {/* 渲染：版图（图居中旋转，填满容器）→ 正面（token 恒正面 / faceUp）→ 背面 → 默认卡背 */}
-      {card.kind === "board" && frontSrc ? (
+      {/* 渲染：die（白底数字面）→ 版图（图居中旋转，填满容器）→ 正面（token 恒正面 / faceUp）→ 背面 → 默认卡背 */}
+      {card.kind === "die" ? (
+        <div className="w-full h-full flex items-center justify-center bg-white">
+          <span className="text-[30px] font-bold">{card.value ?? 1}</span>
+        </div>
+      ) : card.kind === "board" && frontSrc ? (
         <img
           src={frontSrc}
           alt=""

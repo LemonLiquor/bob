@@ -371,6 +371,20 @@ export function addScore(state: GameState, seatId: string, delta: number): GameS
 }
 
 /**
+ * 设置 die 点数（clamp 1..sides）。掷骰 = UI 生成随机数后调用（引擎保持纯函数，
+ * 服务端照常权威应用）。实体不存在或非 die → 原状态。不可变更新
+ */
+export function setDie(state: GameState, entityId: string, value: number): GameState {
+  const die = state.entities.find((e) => e.id === entityId);
+  if (die?.kind !== "die") return state;
+  const clamped = Math.min(die.sides ?? 6, Math.max(1, Math.round(value)));
+  return {
+    ...state,
+    entities: state.entities.map((e) => (e.id === entityId ? { ...e, value: clamped } : e)),
+  };
+}
+
+/**
  * 移动整个牌堆到桌面坐标 (x, y)（x/y = 堆左上角，世界坐标）。不可变更新。
  * ① 落点命中同尺寸的另一堆 → 合并：源堆牌并入目标堆顶，源堆删除（合并不是解散）
  * ② 落点命中宿主实体 → 跟随（坐标换算相对）

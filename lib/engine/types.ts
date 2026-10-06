@@ -14,8 +14,8 @@ export interface Sprite {
 /** 旋转角度（度，顺时针） */
 export type Rotation = 0 | 90 | 180 | 270;
 
-/** 实体类型判别：kind 决定能力与 faces 结构，前端按 kind 区别对待 */
-export type EntityKind = "card" | "token" | "board";
+/** 实体类型判别：kind 决定能力与 faces 结构，前端按 kind 区别对待（die = 数字面骰/计数器） */
+export type EntityKind = "card" | "token" | "board" | "die";
 
 /** 渲染尺寸（桌面 px） */
 export type Size = { width: number; height: number };
@@ -29,7 +29,8 @@ export type Size = { width: number; height: number };
 export type Prefab =
   | { kind: "card"; id: string; faces: { front: string; back: string }; size?: Size }
   | { kind: "token"; id: string; faces: { front: string }; size?: Size }
-  | { kind: "board"; id: string; faces: { front: string }; size?: Size };
+  | { kind: "board"; id: string; faces: { front: string }; size?: Size }
+  | { kind: "die"; id: string; sides: number; size?: Size }; // 无图渲染：白底数字面（骰子/计数器）
 
 /** 桌游资产集合：纯美术资源（图片表 + 模板表） */
 export interface GameAssets {
@@ -49,6 +50,8 @@ export interface EntityState {
   kind: EntityKind;   // 从 prefab 复制（构建/迁移时设置）
   faceUp: boolean;    // 默认 false（卡牌背面朝上）；构建时 token/board 可给 true
   rotation: Rotation; // 默认 0；仅 board 可旋转
+  value?: number;     // 仅 die：当前点数（1..sides；沙盒任意同步）
+  sides?: number;     // 仅 die：面数（构建时从 prefab 复制，同 size 先例）
   x: number;          // 坐标（parentId 非空 = 相对父版图容器；空 = 世界坐标/桌面坐标系）
   y: number;
   zIndex: number;     // z 序，越大越靠上（版图内为容器 SC 内比较）
@@ -106,4 +109,5 @@ export type GameAction =
   | { type: "flip_pile"; pileId: string } // 翻整叠（pile 内 card faceUp 取反；token/board 单面不动）
   | { type: "rotate_entity"; entityId: string } // 顺时针旋转 90°（仅 board 生效）
   | { type: "shuffle_pile"; pileId: string }
-  | { type: "add_score"; seatId: string; delta: number }; // 座位计分（沙盒任意加减）
+  | { type: "add_score"; seatId: string; delta: number } // 座位计分（沙盒任意加减）
+  | { type: "set_die"; entityId: string; value: number }; // die 点数（掷骰/±1 由此承载，随机数由 UI 生成）

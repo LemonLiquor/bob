@@ -12,7 +12,7 @@ import type { EntityKind, Size } from "@/lib/engine/types";
 // - kind 决定能力（card 默认卡背 / token 单面可叠 / board 可旋转）
 // ============================================================
 
-const KIND_PRESETS: Record<EntityKind, { size: Size; label: string }> = {
+const KIND_PRESETS: Record<"card" | "token" | "board", { size: Size; label: string }> = {
   card: { size: { width: 120, height: 168 }, label: "卡牌 5:7" },
   token: { size: { width: 80, height: 80 }, label: "Token 1:1" },
   board: { size: { width: 240, height: 240 }, label: "版图 1:1" },
@@ -96,11 +96,11 @@ function floodFill(
 
 interface DrawEntityModalProps {
   onClose: () => void;
-  onCreate: (data: { url: string; kind: EntityKind; size: Size }) => void;
+  onCreate: (data: { url: string; kind: "card" | "token" | "board"; size: Size }) => void;
 }
 
 export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalProps) {
-  const [kind, setKind] = useState<EntityKind>("token");
+  const [kind, setKind] = useState<"card" | "token" | "board">("token");
   const [size, setSize] = useState<Size>(KIND_PRESETS.token.size);
   const [color, setColor] = useState(COLORS[0]);
   const [brush, setBrush] = useState(BRUSH_SIZES[1]);
@@ -459,7 +459,7 @@ export default function DrawEntityModal({ onClose, onCreate }: DrawEntityModalPr
           <div className="flex flex-col shrink-0">
         {/* kind 选择 */}
         <div className="flex gap-1.5 mb-3">
-          {(Object.keys(KIND_PRESETS) as EntityKind[]).map((k) => (
+          {(Object.keys(KIND_PRESETS) as ("card" | "token" | "board")[]).map((k) => (
             <button
               key={k}
               className={`text-xs px-3 py-1.5 border-2 cursor-pointer ${

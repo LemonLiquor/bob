@@ -34,6 +34,7 @@ export class AssetLibrary {
   getPrefabFaces(prefabId: string): [string, string] | undefined {
     const prefab = this.prefabs.get(prefabId);
     if (!prefab) return undefined;
+    if (prefab.kind === "die") return undefined; // die 无图：渲染白底数字面
     const front = this.sprites.get(prefab.faces.front);
     if (!front) return undefined;
     if (prefab.kind === "card") {

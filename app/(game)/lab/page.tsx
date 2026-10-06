@@ -221,7 +221,7 @@ export default function LabPage() {
   }
 
   /** 手绘实体落地：sprite + prefab + 实例（网格空位摆位，z 置顶） */
-  function handleDrawCreate({ url, kind, size }: { url: string; kind: EntityKind; size: Size }) {
+  function handleDrawCreate({ url, kind, size }: { url: string; kind: "card" | "token" | "board"; size: Size }) {
     const sprite: Sprite = { id: allocSpriteId(), url };
     const prefabId = `prefab-${entityCounterRef.current}`;
     const instId = `inst-${entityCounterRef.current}`;
@@ -305,7 +305,7 @@ export default function LabPage() {
   const empty = labState.entities.length === 0 && labState.piles.length === 0;
 
   // 实体统计（上传确认窗展示，按 kind 分组）
-  const kindCounts = { card: 0, token: 0, board: 0 };
+  const kindCounts = { card: 0, token: 0, board: 0, die: 0 };
   for (const e of labState.entities) kindCounts[e.kind]++;
 
 

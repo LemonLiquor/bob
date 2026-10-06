@@ -74,7 +74,7 @@ export function mirrorBackIndex(frontIndex: number, cols: number): number {
 
 /** 实体组（页面内临时结构，不进协议/存储）：每组一个牌堆，每项引用图片池 sprite id */
 export interface EntityGroup {
-  kind: EntityKind; // 组级类型：card / token / board（导入时选择；能力由 kind 决定）
+  kind: Exclude<EntityKind, "die">; // 组级类型：card / token / board（导入时选择；能力由 kind 决定；die 不建组，来自 TTS 导入）
   items: { frontSpriteId: string; backSpriteId: string }[]; // backSpriteId 空串 = 默认卡背（card）/ 无背面（token/board）
 }
 

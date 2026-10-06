@@ -60,6 +60,7 @@ export default function GameBoard({ gameState: propState, onAction, initialState
     : gameState.seats[0];
   const mySeatId = mySeat?.id ?? "";
   const otherSeats = controlled ? gameState.seats.filter((s) => s.id !== mySeatId) : [];
+  const [shiftHeld, setShiftHeld] = useState(false); // Shift 按住 = 整堆移动模式（声明提前供 handleRotate 使用）
 
   const dispatch = useCallback((action: GameAction) => {
     if (controlled) {
@@ -70,19 +71,26 @@ export default function GameBoard({ gameState: propState, onAction, initialState
   }, [controlled, onAction]);
 
   const handleFlip = useCallback((cardId: string) => {
-    // Token/版图单面禁翻：发送前拦截（省带宽；引擎 flipCard 防御保留）
-    if (gameState.entities.find((e) => e.id === cardId)?.kind !== "card") return;
-    dispatch({ type: "flip_card", cardId });
+    const entity = gameState.entities.find((e) => e.id === cardId);
+    // 卡牌 = 翻面；die = 掷骰（随机数 UI 生成，引擎保持纯函数）
+    if (entity?.kind === "card") {
+      dispatch({ type: "flip_card", cardId });
+    } else if (entity?.kind === "die") {
+      dispatch({ type: "set_die", entityId: cardId, value: 1 + Math.floor(Math.random() * (entity.sides ?? 6)) });
+    }
   }, [dispatch, gameState]);
 
-  // R 键：hover 自由版图 → 顺时针旋转 90°（对局可用，协议动作；pile 内 R = 洗牌由 Pile 处理）
+  // R 键：hover 版图 → 顺时针旋转 90°；hover die → 点数 ±1（Shift+R = -1，setDie 内 clamp）
   const handleRotate = useCallback(
     (id: string) => {
       const entity = gameState.entities.find((e) => e.id === id);
-      if (entity?.kind !== "board") return; // 仅版图可旋转
-      dispatch({ type: "rotate_entity", entityId: id });
+      if (entity?.kind === "board") {
+        dispatch({ type: "rotate_entity", entityId: id });
+      } else if (entity?.kind === "die") {
+        dispatch({ type: "set_die", entityId: id, value: (entity.value ?? 1) + (shiftHeld ? -1 : 1) });
+      }
     },
-    [gameState, dispatch],
+    [gameState, dispatch, shiftHeld],
   );
 
   // D 键：hover 任意牌 → 抓入手牌区（自由牌 / 牌堆顶牌 / 其他人手牌区均可，沙盒语义）
@@ -110,7 +118,6 @@ export default function GameBoard({ gameState: propState, onAction, initialState
 
   const [isDragging, setIsDragging] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null); // 拖动中的实体 id（拖动中 zIndex 置顶防被版图盖住）
-  const [shiftHeld, setShiftHeld] = useState(false); // Shift 按住 = 整堆移动模式
   // 拖拽累计位移（视口坐标）：版图拖动时叠加到其后代的渲染坐标（拍平渲染的跟随机制）
   const [dragDelta, setDragDelta] = useState({ x: 0, y: 0 });
   const dragStartRef = useRef<

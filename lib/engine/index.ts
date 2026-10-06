@@ -3,7 +3,7 @@ export { applyAction, findCards } from "./reducers";
 export {
   moveCard, moveCardToHand, moveCardFromHand, moveCardToPile, moveCardFromPile, movePile,
   shufflePile, flipCard, flipPile, rotateEntity, findOverlap, dropHandToTable, removeEntity,
-  assignParents, worldOf,
+  assignParents, worldOf, addScore, setDie,
 } from "./actions";
 export type { OverlapTarget } from "./actions";
 export { createSeat, createSeatFromTemplate, DEFAULT_SEAT_TEMPLATE } from "./demo-data";
