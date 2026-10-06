@@ -65,12 +65,15 @@ function fileKey(filename: string): string {
   return flattenUrl(base).toLowerCase();
 }
 
-/** 遍历对象树（含嵌套 ContainedObjects） */
-export function walkObjects(objs: TtsObject[] | undefined, visit: (o: TtsObject) => void): void {
-  for (const o of objs ?? []) {
-    visit(o);
-    walkObjects(o.ContainedObjects, visit);
-  }
+/** 遍历对象树（含嵌套 ContainedObjects）：depth = 嵌套深度（0 = 桌面顶层） */
+export function walkObjects(objs: TtsObject[] | undefined, visit: (o: TtsObject, depth: number) => void): void {
+  const walk = (objs: TtsObject[] | undefined, depth: number) => {
+    for (const o of objs ?? []) {
+      visit(o, depth);
+      walk(o.ContainedObjects, depth + 1);
+    }
+  };
+  walk(objs, 0);
 }
 
 /** 解析 Save json → 库存清单。images = 用户提供的本地文件名列表（Images 文件夹） */
