@@ -6,6 +6,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { useHoverable } from "@/lib/engine/card-action";
 import CardBack from "./CardBack";
+import Die from "./Die";
 
 interface CardProps {
   card: EntityState;
@@ -34,9 +35,9 @@ export default function Card({ card, children, draggable = false, zoom = 1 }: Ca
 
   const faceClass = card.faceUp ? "bg-white text-black" : "bg-[#1e3a5f] text-white";
   // 一级查表：prefabId → [正面, 背面]（进房时一次性入缓存）
-  // kind 决定面选择：token/board 单面恒正面（禁翻）；card 按 faceUp
+  // kind 决定面选择：card/token 按 faceUp（token 有背面才可翻，UI 把关）；board 恒正面
   const faces = getPrefabFaces(card.prefabId);
-  const showFront = card.kind !== "card" || card.faceUp;
+  const showFront = (card.kind === "card" || card.kind === "token") ? card.faceUp : true;
   const frontSrc = showFront ? faces?.[0] : undefined;
   const backSrc = card.faceUp ? undefined : faces?.[1];
   const shadowClass = isDragging
@@ -84,11 +85,9 @@ export default function Card({ card, children, draggable = false, zoom = 1 }: Ca
       style={cardStyle}
       {...hoverProps}
     >
-      {/* 渲染：die（白底数字面）→ 版图（图居中旋转，填满容器）→ 正面（token 恒正面 / faceUp）→ 背面 → 默认卡背 */}
+      {/* 渲染：die（骰面图/着色数字面，Die 组件）→ 版图（图居中旋转，填满容器）→ 正面（token/card 按 faceUp）→ 背面 → 默认卡背 */}
       {card.kind === "die" ? (
-        <div className="w-full h-full flex items-center justify-center bg-white">
-          <span className="text-[30px] font-bold">{card.value ?? 1}</span>
-        </div>
+        <Die card={card} />
       ) : card.kind === "board" && frontSrc ? (
         <img
           src={frontSrc}

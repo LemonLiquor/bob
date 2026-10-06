@@ -14,6 +14,7 @@ import Card from "@/components/game/Card";
 import HandZone from "@/components/game/HandZone";
 import OtherHandBar from "@/components/game/OtherHandBar";
 import { applyAction, createSeat, findCards, assignParents, worldOf, deriveScene } from "@/lib/engine";
+import { getPrefabFaces, getPrefabSize } from "@/lib/assets/cache";
 import { CardActionProvider } from "@/lib/engine/card-action";
 import type { GameAction, GameState, EntityState } from "@/lib/engine";
 import { sessionStore } from "@/lib/multiplayer/session";
@@ -72,9 +73,12 @@ export default function GameBoard({ gameState: propState, onAction, initialState
 
   const handleFlip = useCallback((cardId: string) => {
     const entity = gameState.entities.find((e) => e.id === cardId);
-    // 卡牌 = 翻面；die = 掷骰（随机数 UI 生成，引擎保持纯函数）
+    // 卡牌/双面 token（TTS tile 正背面，如说明书）= 翻面；die = 掷骰（随机数 UI 生成，引擎保持纯函数）
     if (entity?.kind === "card") {
       dispatch({ type: "flip_card", cardId });
+    } else if (entity?.kind === "token") {
+      // 仅双面 token 响应（无背面 = 单面 token，忽略）
+      if (getPrefabFaces(cardId)?.[1]) dispatch({ type: "flip_token", entityId: cardId });
     } else if (entity?.kind === "die") {
       dispatch({ type: "set_die", entityId: cardId, value: 1 + Math.floor(Math.random() * (entity.sides ?? 6)) });
     }
@@ -128,6 +132,51 @@ export default function GameBoard({ gameState: propState, onAction, initialState
 
   // 桌面缩放/平移（会话 UI 状态，不入存档）：渲染容器 translate(pan) scale(zoom)，origin 0 0
   const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
+  // 快捷键预览（会话 UI 状态）：按住 Z = 鼠标处浮动预览（UI 层，实体×2 等比）；V = 居中查看（切换式）；die 无图不响应
+  const [zoomPreview, setZoomPreview] = useState<{ src: string; left: number; top: number; w: number; h: number } | null>(null);
+  const [viewId, setViewId] = useState<string | null>(null);
+
+  const currentFaceSrc = useCallback((id: string): string | undefined => {
+    const e = gameState.entities.find((x) => x.id === id);
+    const faces = e ? getPrefabFaces(e.prefabId) : undefined;
+    if (!e || !faces) return undefined;
+    return (e.kind === "card" || e.kind === "token") && !e.faceUp ? faces[1] || faces[0] : faces[0];
+  }, [gameState]);
+
+  const viewSrc = useMemo(() => (viewId ? currentFaceSrc(viewId) : undefined), [viewId, currentFaceSrc]);
+
+  // Z/V 处理器沿用本文件拖拽处理器惯例（普通函数 + provider refs 持有）：
+  // 直接调用 setState 的回调用 useCallback 手动记忆化会触发 react-hooks/preserve-manual-memoization
+  function handleZoomStart(id: string, pointer: { x: number; y: number }) {
+    const e = gameState.entities.find((x) => x.id === id);
+    if (!e || e.kind === "die") return;
+    const src = currentFaceSrc(id);
+    if (!src) return;
+    // 显示尺寸 = 实体尺寸 ×2（等比），clamp 到 90% 视口内（大版图不超屏）
+    const size = getPrefabSize(e.prefabId) ?? { width: 120, height: 168 };
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const scale = Math.min(1, (vw * 0.9) / (size.width * 2), (vh * 0.9) / (size.height * 2));
+    const w = Math.round(size.width * 2 * scale);
+    const h = Math.round(size.height * 2 * scale);
+    // 位置 = 鼠标右上角一点（右 12 / 上 12）：右缘放不下翻左侧，仍放不下贴右缘；纵向 clamp 视口内
+    let left = pointer.x + 12;
+    if (left + w > vw - 8) left = pointer.x - w - 12;
+    if (left + w > vw - 8) left = vw - 8 - w;
+    left = Math.max(8, left);
+    const top = Math.max(8, Math.min(pointer.y - h - 12, vh - 8 - h));
+    setZoomPreview({ src, left, top, w, h });
+  }
+
+  function handleZoomEnd() {
+    setZoomPreview(null);
+  }
+
+  function handleView(id: string) {
+    const e = gameState.entities.find((x) => x.id === id);
+    if (!e || e.kind === "die") return;
+    setViewId(viewId && viewId === id ? null : id); // 切换式：再按 V 关闭，点击遮罩也关闭
+  }
   const viewRef = useRef(view);
   useEffect(() => {
     viewRef.current = view;
@@ -312,6 +361,9 @@ export default function GameBoard({ gameState: propState, onAction, initialState
           onFlip={handleFlip}
           onDraw={handleDraw}
           onRotate={handleRotate}
+          onZoomStart={handleZoomStart}
+          onZoomEnd={handleZoomEnd}
+          onView={handleView}
           onDelete={labMode ? onLabDelete : undefined}
           onCopy={labMode ? onLabCopy : undefined}
           disabled={isDragging}
@@ -380,6 +432,26 @@ export default function GameBoard({ gameState: propState, onAction, initialState
           )}
         </CardActionProvider>
       </DndContext>
+
+      {/* 按住 Z：浮动预览（UI 层独立于桌面缩放；pointer-events-none 不挡操作） */}
+      {zoomPreview && (
+        <img
+          src={zoomPreview.src}
+          alt=""
+          className="fixed z-[60] rounded-lg shadow-2xl ring-1 ring-white/20 pointer-events-none select-none"
+          style={{ left: zoomPreview.left, top: zoomPreview.top, width: zoomPreview.w, height: zoomPreview.h }}
+        />
+      )}
+
+      {/* V：居中查看（按 V 开，点击遮罩关闭） */}
+      {viewSrc && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center cursor-zoom-out"
+          onClick={() => setViewId(null)}
+        >
+          <img src={viewSrc} alt="" className="max-w-[90vw] max-h-[90vh] rounded-lg shadow-2xl" />
+        </div>
+      )}
     </main>
   );
 }

@@ -29,19 +29,38 @@ export class AssetLibrary {
   /**
    * 便捷：prefab → [正面url, 背面url]（按 kind）。
    * prefab 或正面 sprite 缺失 → undefined（渲染回退默认样式）；
-   * token/board 单面 → 背面恒空（渲染恒正面）；card 背面缺失 → 空串（渲染回退默认卡背）。
+   * token 背面缺失 → 空串（UI 只对有背面者派翻面动作）；card 背面缺失 → 空串（渲染回退默认卡背）。
+   * die → undefined（渲染走 getDieVisual）。
    */
   getPrefabFaces(prefabId: string): [string, string] | undefined {
     const prefab = this.prefabs.get(prefabId);
     if (!prefab) return undefined;
-    if (prefab.kind === "die") return undefined; // die 无图：渲染白底数字面
+    if (prefab.kind === "die") return undefined; // die 无 faces 结构：走 getDieVisual
     const front = this.sprites.get(prefab.faces.front);
     if (!front) return undefined;
     if (prefab.kind === "card") {
       const backId = prefab.faces.back ?? "";
       return [front.url, backId ? (this.sprites.get(backId)?.url ?? "") : ""];
     }
-    return [front.url, ""]; // token/board 单面
+    if (prefab.kind === "token") {
+      const backId = prefab.faces.back;
+      return [front.url, backId ? (this.sprites.get(backId)?.url ?? "") : ""];
+    }
+    return [front.url, ""]; // board 单面
+  }
+
+  /**
+   * die 渲染数据：faceUrls[v-1] = 点数 v 的骰面图（空串 = 该面无图，回退数字面）、
+   * tint = ColorDiffuse 着色底色、label = 昵称角标。非 die prefab → undefined。
+   */
+  getDieVisual(prefabId: string): { faceUrls: string[]; tint?: string; label?: string } | undefined {
+    const prefab = this.prefabs.get(prefabId);
+    if (!prefab || prefab.kind !== "die") return undefined;
+    return {
+      faceUrls: (prefab.faces ?? []).map((id) => this.sprites.get(id)?.url ?? ""),
+      tint: prefab.tint,
+      label: prefab.label,
+    };
   }
 
   /** 渲染尺寸（缺省 120×168 卡牌） */
@@ -60,6 +79,11 @@ export function setAssets(assets: GameAssets): void {
 /** 按 prefab id 取正反 url（渲染用）。未填充或不存在返回 undefined */
 export function getPrefabFaces(prefabId: string): [string, string] | undefined {
   return library?.getPrefabFaces(prefabId);
+}
+
+/** 按 prefab id 取 die 渲染数据（骰面图/着色/角标）。非 die 或未填充返回 undefined */
+export function getDieVisual(prefabId: string): { faceUrls: string[]; tint?: string; label?: string } | undefined {
+  return library?.getDieVisual(prefabId);
 }
 
 /** 按 prefab id 取渲染尺寸（缺省 120×168 卡牌） */

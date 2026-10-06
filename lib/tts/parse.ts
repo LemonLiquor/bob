@@ -13,8 +13,10 @@ export interface TtsObject {
   CustomDeck?: Record<string, TtsCustomDeck>;
   DeckID?: number;
   CardID?: number;
-  CustomImage?: string;
+  /** 字符串形态（旧存档）或对象形态（ImageURL/ImageSecondaryURL 等） */
+  CustomImage?: string | ({ ImageURL?: string; ImageSecondaryURL?: string } & Record<string, unknown>);
   CustomUI?: { ImageURL?: string } & Record<string, unknown>;
+  ColorDiffuse?: { r: number; g: number; b: number };
   MeshURL?: string;
   DiffuseURL?: string;
   MaterialURL?: string;
@@ -50,7 +52,7 @@ export interface TtsInventory {
   /** v1 跳过清单（类型 → 数量） */
   skipped: Record<string, number>;
   /** 可导入对象计数 */
-  importable: { cards: number; decks: number; tokens: number; tiles: number; boards: number; bags: number; dice: number; counters: number };
+  importable: { cards: number; decks: number; tokens: number; tiles: number; boards: number; bags: number; dice: number; counters: number; markers: number };
 }
 
 /** TTS 本地缓存文件名：URL 去掉全部非字母数字字符（防御：非字符串原样返回空） */
@@ -85,7 +87,7 @@ export function parseTtsSave(save: { SaveName?: string; ObjectStates?: TtsObject
     decks: [],
     images: { referenced: 0, matched: 0, missing: [] },
     skipped: {},
-    importable: { cards: 0, decks: 0, tokens: 0, tiles: 0, boards: 0, bags: 0, dice: 0, counters: 0 },
+    importable: { cards: 0, decks: 0, tokens: 0, tiles: 0, boards: 0, bags: 0, dice: 0, counters: 0, markers: 0 },
   };
 
   // 本地文件索引：拍平 key（去扩展名小写）→ 原文件名
@@ -99,10 +101,12 @@ export function parseTtsSave(save: { SaveName?: string; ObjectStates?: TtsObject
   };
 
   const SKIP_TYPES = new Set([
-    "Custom_Assetbundle", "3DText", "Chip", "GameKey", "Notecard", "RPG Figurine",
-    "Backgammon_Short", "backgammon_piece_brown", "backgammon_piece_white",
+    "3DText", "Chip", "GameKey", "Notecard", "RPG Figurine",
     "Chinese_Checkers_Piece", "Checker_black", "Checker_white", "Go_Stone_black", "Go_Stone_white",
   ]);
+  /** 占位标记类型：无法等效映射，但值得在桌上留“名字 + 待实现”标记（玩家可自行替代） */
+  const MARKER_TYPES = new Set(["Custom_Assetbundle"]);
+  const isMarker = (name: string) => MARKER_TYPES.has(name) || name.startsWith("backgammon");
   // 等效映射分类
   const isBag = (name: string) => name === "Bag" || name === "Infinite_Bag" || name === "Custom_Model_Bag";
   const isDie = (name: string) => name.startsWith("Die_") || name === "Custom_Dice";
@@ -114,7 +118,9 @@ export function parseTtsSave(save: { SaveName?: string; ObjectStates?: TtsObject
     inv.types[name] = (inv.types[name] ?? 0) + 1;
 
     // 图片引用收集（各类自定义对象）
-    ref(o.CustomImage);
+    const ci = o.CustomImage;
+    ref(typeof ci === "string" ? ci : ci?.ImageURL);
+    ref(typeof ci === "object" ? ci?.ImageSecondaryURL : undefined);
     ref(o.MeshURL);
     ref(o.DiffuseURL);
     ref(o.MaterialURL);
@@ -149,7 +155,8 @@ export function parseTtsSave(save: { SaveName?: string; ObjectStates?: TtsObject
     else if (name === "Custom_Token") inv.importable.tokens++;
     else if (name === "Custom_Tile") inv.importable.tiles++;
     else if (name === "Custom_Board") inv.importable.boards++;
-    else if (SKIP_TYPES.has(name) || name.startsWith("backgammon") || name.startsWith("Chinese")) inv.skipped[name] = (inv.skipped[name] ?? 0) + 1;
+    else if (isMarker(name)) inv.importable.markers++;
+    else if (SKIP_TYPES.has(name) || name.startsWith("Chinese")) inv.skipped[name] = (inv.skipped[name] ?? 0) + 1;
   });
 
   // 图片匹配

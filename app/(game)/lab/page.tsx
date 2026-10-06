@@ -166,8 +166,19 @@ export default function LabPage() {
     const prefabs = result.assets.prefabs.map((p, i) => {
       const id = `prefab-${eOff + i}`;
       prefabMap.set(p.id, id);
-      const faces = "faces" in p ? { front: spriteMap.get(p.faces.front) ?? "", back: "back" in p ? spriteMap.get((p as { faces: { back: string } }).faces.back ?? "") ?? "" : undefined } : undefined;
-      return ("faces" in p ? { ...p, id, faces } : { ...p, id }) as Prefab;
+      if (p.kind === "die") {
+        // die：faces 为骰面 sprite id 数组（可缺省）
+        return p.faces ? ({ ...p, id, faces: p.faces.map((f) => spriteMap.get(f) ?? f) } as Prefab) : ({ ...p, id } as Prefab);
+      }
+      const front = spriteMap.get(p.faces.front) ?? "";
+      if (p.kind === "card") {
+        return { ...p, id, faces: { front, back: spriteMap.get(p.faces.back) ?? "" } } as Prefab;
+      }
+      if (p.kind === "board") {
+        return { ...p, id, faces: { front } } as Prefab;
+      }
+      const back = p.faces.back !== undefined ? spriteMap.get(p.faces.back) : undefined;
+      return { ...p, id, faces: back !== undefined ? { front, back } : { front } } as Prefab;
     });
     const instMap = new Map<string, string>();
     const entities = result.initialState.entities.map((e, i) => {

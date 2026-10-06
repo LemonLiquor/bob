@@ -466,6 +466,22 @@ export function flipPile(state: GameState, pileId: string): GameState {
   };
 }
 
+/** 翻转双面 token（TTS tile 正/背面，如说明书第 1/2 页）。单面 token 忽略。不可变更新 */
+export function flipToken(state: GameState, entityId: string): GameState {
+  const index = state.entities.findIndex((e) => e.id === entityId);
+  if (index === -1) return state;
+  const token = state.entities[index];
+  if (token.kind !== "token") return state; // 仅 token 可经此翻面（是否有背面由 UI/资产层把关）
+  return {
+    ...state,
+    entities: [
+      ...state.entities.slice(0, index),
+      { ...token, faceUp: !token.faceUp },
+      ...state.entities.slice(index + 1),
+    ],
+  };
+}
+
 /**
  * 顺时针旋转 90°（仅版图生效；卡牌/Token 忽略）。不可变更新。
  * 只改 rotation；尺寸保持原始（渲染/计算处按 rotation 分支取有效尺寸，见 Card 的 boardRotated）。

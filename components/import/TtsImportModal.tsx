@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { parseTtsSave, type TtsObject } from "@/lib/tts/parse";
 import { buildTtsGame, type TtsBuildResult } from "@/lib/tts/build";
-import { dataUrlToImage, fileToDataUrl, cutAtlas } from "@/lib/tts/atlas";
+import { dataUrlToImage, fileToDataUrl, cutAtlas, makeMarkerSprite } from "@/lib/tts/atlas";
 
 // ============================================================
 // TtsImportModal — 导入 TTS 图包弹窗（Lab）
@@ -31,6 +31,7 @@ export default function TtsImportModal({ onClose, onCommit }: TtsImportModalProp
     bags: number;
     dice: number;
     counters: number;
+    markers: number;
     imagesMatched: number;
     imagesMissing: number;
     skipped: Record<string, number>;
@@ -73,6 +74,7 @@ export default function TtsImportModal({ onClose, onCommit }: TtsImportModalProp
           bags: inv.importable.bags,
           dice: inv.importable.dice,
           counters: inv.importable.counters,
+          markers: inv.importable.markers,
           imagesMatched: inv.images.matched,
           imagesMissing: inv.images.missing.length,
           skipped: inv.skipped,
@@ -113,6 +115,7 @@ export default function TtsImportModal({ onClose, onCommit }: TtsImportModalProp
         images,
         cutAtlas: (src: { element: HTMLImageElement }, cols: number, rows: number) =>
           cutAtlas(src.element, cols, rows, { maxSide: 480, quality: 0.82 }),
+        makeMarker: makeMarkerSprite,
       };
       const result = await buildTtsGame(
         save as never,
@@ -155,6 +158,7 @@ export default function TtsImportModal({ onClose, onCommit }: TtsImportModalProp
               <p className="font-bold mb-1">库存报告：{saveName}</p>
               <p>牌堆图集 {report.decks} 套 · 卡牌 {report.cards} 张 · token/地块 {report.tokens}</p>
               <p>袋 {report.bags}（→ 牌堆）· 骰子 {report.dice} · 计数器 {report.counters}（→ 数字牌）</p>
+              {report.markers > 0 && <p>占位标记 {report.markers}（无法映射的组件，桌面黄便签 + 名字）</p>}
               <p className={report.imagesMissing ? "text-red-500" : ""}>
                 图片匹配 {report.imagesMatched}{report.imagesMissing ? ` / 缺失 ${report.imagesMissing}` : " ✓"}
               </p>

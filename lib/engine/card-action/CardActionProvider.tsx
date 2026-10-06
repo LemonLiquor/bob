@@ -38,6 +38,9 @@ interface CardActionProviderProps {
   onRotate?: (id: string) => void;   // R 键旋转悬停实体（仅 board 生效，GameBoard 按 kind 拦截）
   onDelete?: (id: string) => void;   // Lab 编辑：Delete 键删除悬停实体（可选，不进协议）
   onCopy?: (id: string) => void;     // Lab 编辑：Ctrl/Cmd+D 复制悬停实体（可选，不进协议）
+  onZoomStart?: (id: string, pointer: { x: number; y: number }) => void; // 按住 Z：浮动预览（pointer = 触发时刻鼠标位置）
+  onZoomEnd?: () => void;            // 松开 Z / 失焦：关闭浮动预览
+  onView?: (id: string) => void;     // V 键：居中查看（开关切换由 GameBoard 处理）
   disabled?: boolean;
 }
 
@@ -48,6 +51,9 @@ export default function CardActionProvider({
   onRotate,
   onDelete,
   onCopy,
+  onZoomStart,
+  onZoomEnd,
+  onView,
   disabled = false,
 }: CardActionProviderProps) {
   const activeIdRef = useRef<string | null>(null);
@@ -57,6 +63,9 @@ export default function CardActionProvider({
   const onRotateRef = useRef(onRotate);
   const onDeleteRef = useRef(onDelete);
   const onCopyRef = useRef(onCopy);
+  const onZoomStartRef = useRef(onZoomStart);
+  const onZoomEndRef = useRef(onZoomEnd);
+  const onViewRef = useRef(onView);
   const disabledRef = useRef(disabled);
 
   useEffect(() => {
@@ -65,6 +74,9 @@ export default function CardActionProvider({
     onRotateRef.current = onRotate;
     onDeleteRef.current = onDelete;
     onCopyRef.current = onCopy;
+    onZoomStartRef.current = onZoomStart;
+    onZoomEndRef.current = onZoomEnd;
+    onViewRef.current = onView;
     disabledRef.current = disabled;
   });
 
@@ -109,11 +121,25 @@ export default function CardActionProvider({
       if (lower === "f" && !e.shiftKey) onFlipRef.current(id); // Shift+F = 翻整叠（Pile 监听），此处排除避免顶牌双翻
       if (lower === "d") onDrawRef.current(id);
       if (lower === "r") onRotateRef.current?.(id);
+      if (lower === "v" && !e.repeat) onViewRef.current?.(id);
+      // 按住 Z：浮动预览（重复 keydown 跳过；位置 = 触发时刻鼠标位置）
+      if (lower === "z" && !e.repeat) onZoomStartRef.current?.(id, { ...pointerRef.current });
       if (e.key === "Delete") onDeleteRef.current?.(id);
     };
+    // 松开 Z / 窗口失焦：关闭浮动预览（防按住时切走卡住）
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "z") onZoomEndRef.current?.();
+    };
+    const handleBlur = () => onZoomEndRef.current?.();
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+    };
   }, []);
 
   return (

@@ -15,7 +15,12 @@ export function pruneUnusedAssets(assets: GameAssets, entities: EntityState[]): 
 
   const usedSpriteIds = new Set<string>();
   for (const p of prefabs) {
-    if (p.kind === "die") continue; // die 无图：不引用 sprite
+    if (p.kind === "die") {
+      for (const f of p.faces ?? []) {
+        if (f) usedSpriteIds.add(f); // die 骰面图（TTS 自定义骰）
+      }
+      continue;
+    }
     for (const v of Object.values(p.faces)) {
       if (v) usedSpriteIds.add(v);
     }

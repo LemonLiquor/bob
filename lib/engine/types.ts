@@ -23,14 +23,16 @@ export type Size = { width: number; height: number };
 /**
  * 实体模板（预制体）：判别联合。kind 决定 faces 结构与能力；模板不承担行为字段（无 stackable/singleFace）。
  * - card：可翻（F）、可叠、可洗牌；back 空串 = 渲染回退默认卡背
- * - token：单面（渲染恒正面、禁翻）；可叠
+ * - token：可叠；back 缺省 = 单面（渲染恒正面、禁翻）；有 back = 双面（TTS tile 正/背面，如说明书，可翻 F）
  * - board：单面（渲染恒正面、禁翻）、可旋转（R 顺时针 90°）、不可叠（placeAt 跳过建堆）、不可入手牌
+ * - die：骰子/计数器。faces[v-1] = 点数 v 的骰面图（TTS 自定义骰 3×3 模板取格 3..8），缺省 = 数字面；
+ *   tint = ColorDiffuse 着色底色（CSS 颜色）；label = 昵称角标（HP/体力等）
  */
 export type Prefab =
   | { kind: "card"; id: string; faces: { front: string; back: string }; size?: Size }
-  | { kind: "token"; id: string; faces: { front: string }; size?: Size }
+  | { kind: "token"; id: string; faces: { front: string; back?: string }; size?: Size }
   | { kind: "board"; id: string; faces: { front: string }; size?: Size }
-  | { kind: "die"; id: string; sides: number; size?: Size }; // 无图渲染：白底数字面（骰子/计数器）
+  | { kind: "die"; id: string; sides: number; faces?: string[]; tint?: string; label?: string; size?: Size };
 
 /** 桌游资产集合：纯美术资源（图片表 + 模板表） */
 export interface GameAssets {
@@ -40,7 +42,7 @@ export interface GameAssets {
 
 /**
  * 实例（场上实体）：kind 判别 + 公共状态字段（faceUp/rotation 带默认值，识别代价低）。
- * - faceUp：仅 card 有效（翻面）；token/board 单面恒正面（渲染按 kind 忽略，flip 按 kind 拦截）
+ * - faceUp：card/token 有效（翻面）；board 单面恒正面（渲染按 kind 忽略，flip 按 kind 拦截）
  * - rotation：仅 board 可旋转（客户端按 kind 限制）；渲染 CSS transform，碰撞盒用未旋转尺寸
  * 渲染：getPrefabFaces(entity.prefabId) → [正面url, 背面url] → kind + faceUp 决定显示哪面
  */
@@ -106,6 +108,7 @@ export type GameAction =
   | { type: "move_pile"; pileId: string; x: number; y: number } // 整堆移动
   | { type: "move_to_hand"; cardId: string; seatId: string } // seatId 任意（沙盒）
   | { type: "flip_card"; cardId: string }
+  | { type: "flip_token"; entityId: string } // 双面 token 翻面（TTS tile 正/背面，如说明书第 1/2 页；单面 token 忽略）
   | { type: "flip_pile"; pileId: string } // 翻整叠（pile 内 card faceUp 取反；token/board 单面不动）
   | { type: "rotate_entity"; entityId: string } // 顺时针旋转 90°（仅 board 生效）
   | { type: "shuffle_pile"; pileId: string }

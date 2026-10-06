@@ -52,6 +52,11 @@ export default function Pile({ pile, cards, onShuffle, onFlipPile, shiftHeld, zo
     return () => window.removeEventListener("keydown", onKey);
   }, [isHovered, pile.id, onShuffle, onFlipPile]);
 
+  // 空堆不渲染（不挂 droppable 节点）：旧存档可能带空堆（构建期已不再产出），
+  // 渲染成虚线框会劫持拖放落点，而引擎判定跳过空堆 → 表现为"堆叠失效"。
+  // 置于全部 hooks 之后（Rules of Hooks）
+  if (count === 0) return null;
+
   // hover / 拖拽悬停：黑虚线框变红（不叠加 ring / 实线框）
   const overClass = isOver || isHovered ? "dashed-zone-active" : "dashed-zone";
 

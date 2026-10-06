@@ -103,3 +103,36 @@ export async function imageToDataUrl(
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL(format, quality);
 }
+
+/** 占位标记贴图：黄便签 + 组件名 + “待实现”角标（无法等效映射的 TTS 组件，玩家可自行替代） */
+export function makeMarkerSprite(label: string): { dataUrl: string; width: number; height: number } {
+  const w = 256;
+  const h = 192;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#f2d478";
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = "rgba(0,0,0,0.25)";
+  ctx.lineWidth = 6;
+  ctx.strokeRect(3, 3, w - 6, h - 6);
+  ctx.fillStyle = "#4a3b12";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  // 名字最多两行、每行 7 个字符（超长截断，标记可读优先）
+  const chars = label.replace(/\s+/g, " ").trim().slice(0, 14);
+  const line1 = chars.slice(0, 7);
+  const line2 = chars.slice(7, 14);
+  ctx.font = "bold 30px sans-serif";
+  if (line2) {
+    ctx.fillText(line1, w / 2, h / 2 - 34);
+    ctx.fillText(line2 + (label.length > 14 ? "…" : ""), w / 2, h / 2 + 2);
+  } else {
+    ctx.fillText(line1, w / 2, h / 2 - 16);
+  }
+  ctx.font = "bold 22px sans-serif";
+  ctx.fillStyle = "#8a2b2b";
+  ctx.fillText("待实现", w / 2, h - 28);
+  return { dataUrl: canvas.toDataURL("image/png"), width: w, height: h };
+}

@@ -3,6 +3,28 @@
 > 记录决定了什么 + 否决了什么，**与代码保持同步**（代码改名/移动时同步更新事实）。
 > 单文件多条目，小项目不建目录；条目按日期倒序。
 
+## TTS 导入：卡背语义纠偏 + 缺失组件降级映射 + 骰子可视化
+
+- **日期**：2026-10-06（首次提出）
+- **主题**：以撒 mod 实测卡背仍错；骰子全部白底数字无法区分；说明书（双面 Custom_Tile）缺翻面与阅读手段；21 个 Assetbundle / 13 个内置棋子区域标记无对应组件
+
+**决定了什么**：
+
+- **卡背语义纠偏（`lib/tts/build.ts`）**：TTS 语义 = `UniqueBack=1` → BackURL 与正面同网格（每卡独立背）；`=0` → BackURL 为整副共用的一张完整卡背图。登记（1×1 vs 网格）与取格（恒 0 号 vs 同格）两处 + `ensureCardPrefab` 查找格三处按此实现。此前的方向（false → 按网格切）会导致每张卡显示卡背图的 1/N 碎片
+- **双面 token**：token prefab `faces.back?`（`lib/engine/types.ts`）；CustomImage.ImageSecondaryURL → back；新动作 `flip_token`（F 键，GameBoard 仅对有背面者派发）；渲染按 faceUp 选面（Card.tsx）
+- **占位标记**：无法等效映射的组件（Assetbundle 3D 模型、backgammon* 棋子区域标记、无图 Custom_Model）→ 黄便签 token（`atlas.makeMarkerSprite`：名字 + "待实现"，4:3，随组件 scale 定尺寸），摆在原位置供玩家自行替代；3DText / Chinese_Checkers_Piece（mod 工具/装饰）静默跳过。S1 报告新增 `importable.markers`，S3 report 新增 `markers`
+- **骰子可视化**：die prefab 增 `faces?: string[]`（点数 v → faces[v-1]）、`tint?`（ColorDiffuse → CSS 色）、`label?`（昵称角标）。Custom_Dice 骰面贴图按 TTS 自定义骰模板 3×3 切，1..6 点 = 格 3..8（顶行 3 格为底色占位，实测确认）；标准 Die_* 无图 → 着色数字面；渲染拆独立组件 `components/game/Die.tsx`（数字色按底色亮度取深/浅，label 底部角标），prune 扫描 die faces
+- **顺带修复**：袋内 token 双发（pass 1 与 emitContainer 各发一次）→ pass 1 仅 depth 0 发放；嵌套容器/无图 token 类内容物不再刷"容器内容物暂不支持"警告（本 mod 警告 34 → 0）；**空堆修复**——成员全空的袋（内容物均为嵌套容器/跳过项）此前仍建 `entityIds: []` 的堆，渲染虚线框 + droppable 劫持落点而引擎判定跳过空堆，表现为"拖上去堆叠失效"（实测 9 个，含袋中袋双空堆叠位）→ 构建期不再产出空堆（44→35 堆），Pile 对存量空堆不渲染（null，置于全部 hooks 后）；GameBoard 实体预览快捷键（会话 UI 状态不入存档）：按住 Z = 鼠标右上角浮动预览（实体×2 等比、clamp 90% 视口、松开/失焦关闭），V = 居中查看（切换式：再按 V 或点遮罩关闭）；die 无图不响应
+
+**否决了什么**：
+
+- **Assetbundle 平面化**：该 mod 21 个 Assetbundle 全部无 DiffuseURL/CustomImage（纯 mesh），无图可平面化 → 只能占位标记；若未来存档带贴图，现有 token 分支已兼容 `Custom_Assetbundle`
+- **专用"说明书"组件 / 独立缩放视图层**：双面 token + 快捷键预览覆盖需求，不做手册翻页器
+- **Counter 拆独立 kind**：仍映射 die（sides 20），靠 label "体力" + 着色区分即可，不动协议
+- **双击实体放大**：被 V 键替代（快捷键统一走 provider 分发，不与拖拽手势纠缠）；骰子 hover 操作提示也做过即弃——骰子提示需溢出 Card 的 overflow-hidden，收益不抵布局风险，用户裁掉
+
+**验证**：tsc 干净；eslint 无新增问题（存量 7 error 在未触及的 room/login/RoomPanel）；真实存档（1621070501.json + 本地 Images 84 张）端到端模拟构建 14 项断言全过——789 卡 prefab 卡背全有图且同图集共用同背、说明书双面且仅 1 张、flip_token 生效、占位标记 37（21+13+3）、骰面 36 实例全齐、HP/体力 角标与着色正确、prune 保留骰面、无坐标双发。
+
 ## 场景派生层：deriveScene 纯函数集中位置/z 序/跟随不变量
 
 - **日期**：2026-10-05（首次提出）
