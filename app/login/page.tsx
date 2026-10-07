@@ -1,21 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
+
+// localStorage 是客户端外部源：useSyncExternalStore 读快照（SSR 占位 null），
+// 避免 mount effect 里同步 setState（react-hooks/set-state-in-effect）
+const noopSubscribe = () => () => {};
+const getSavedName = () => localStorage.getItem("bg_player_name");
+const getSavedNameServer = () => null;
 
 export default function LoginPage() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [checking, setChecking] = useState(true);
+  const savedName = useSyncExternalStore(noopSubscribe, getSavedName, getSavedNameServer);
 
+  // 已有昵称 → 直接进广场（导航必须在 effect，渲染期不可跳转）
   useEffect(() => {
-    const saved = localStorage.getItem("bg_player_name");
-    if (saved) {
-      router.replace("/games");
-      return;
-    }
-    setChecking(false);
-  }, [router]);
+    if (savedName) router.replace("/games");
+  }, [savedName, router]);
 
   function handleEnter() {
     const trimmed = name.trim();
@@ -30,7 +32,7 @@ export default function LoginPage() {
     router.replace("/games");
   }
 
-  if (checking) return null;
+  if (savedName) return null; // 已登录跳转中
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-desk">

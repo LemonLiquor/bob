@@ -21,26 +21,22 @@ import RoomPanel from "@/components/room/RoomPanel";
 
 export default function RoomPage() {
   const router = useRouter();
-  const [gameState, setGameState] = useState<GameState | null>(null);
-  const [roomCode, setRoomCode] = useState("");
-  const [isCreator, setIsCreator] = useState(false);
-  const initialStateRef = useRef<GameState | null>(null); // 无座存档版（重新开始用）
+  // session 在进入房间时写入 store（导航前）；code/isCreator 会话期内恒定 → 快照派生，
+  // 不在 mount effect 里同步 setState（react-hooks/set-state-in-effect）
+  const [session] = useState(() => sessionStore.get());
+  const [gameState, setGameState] = useState<GameState | null>(() => session?.gameState ?? null);
+  const roomCode = session?.code ?? "";
+  const isCreator = !!session && session.creatorId === session.playerId;
+  const initialStateRef = useRef<GameState | null>(session?.initialState ?? null); // 无座存档版（重新开始用）
 
-  // 挂载时从 sessionStore 取初始状态（含资产），并监听 state_sync
+  // 无 session = 直接刷新了房间 URL → 回广场；否则订阅 state_sync
   useEffect(() => {
-    const session = sessionStore.get();
     if (!session) {
       router.replace("/games");
       return;
     }
-
-    // 资产一次性入缓存 → 直接渲染服务端初始状态（无座 + 默认空座）
+    // 资产一次性入缓存（全局 AssetLibrary，非 React state）→ 直接渲染服务端初始状态
     setAssets(session.assets);
-    setGameState(session.gameState);
-    setRoomCode(session.code);
-    setIsCreator(session.creatorId === session.playerId);
-    initialStateRef.current = session.initialState;
-
     const unsub = onMessage((msg: ServerMessage) => {
       if (msg.type === "state_sync") {
         setGameState(msg.state);
@@ -52,7 +48,7 @@ export default function RoomPage() {
       }
     });
     return unsub;
-  }, [router]);
+  }, [router, session]);
 
   // 用户操作 → 发送到服务器
   const handleAction = useCallback((action: GameAction) => {

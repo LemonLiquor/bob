@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { send, onMessage } from "@/lib/multiplayer/transport";
 import { onStatusChange } from "@/lib/multiplayer/connection";
 import { sessionStore } from "@/lib/multiplayer/session";
@@ -9,23 +9,18 @@ import type { Seat } from "@/lib/engine";
 
 // ============================================================
 // RoomPanel — 在线玩家 + 座位列表（离开入口在 ESC 控制面板）
+// session 在进入房间时写入 store；code/playerId 会话期内恒定，
+// 渲染期快照一次（不用 ref——渲染期访问 ref 是反模式且被 lint 禁止）
 // ============================================================
 
 export default function RoomPanel() {
-  const codeRef = useRef("");
-  const playerIdRef = useRef("");
-  const [players, setPlayers] = useState<PlayerInfo[]>([]);
-  const [seats, setSeats] = useState<Seat[]>([]);
+  const [session] = useState(() => sessionStore.get());
+  const code = session?.code ?? "";
+  const playerId = session?.playerId ?? "";
+  const [players, setPlayers] = useState<PlayerInfo[]>(() => session?.players ?? []);
+  const [seats, setSeats] = useState<Seat[]>(() => session?.gameState.seats ?? []);
 
-  useEffect(() => {
-    const session = sessionStore.get();
-    if (!session) return; // room 页面已保证 session 存在（防御性不渲染）
-    codeRef.current = session.code;
-    playerIdRef.current = session.playerId;
-    setPlayers(session.players);
-    setSeats(session.gameState.seats);
-  }, []);
-
+  // 断线重连：重发 join_room（connection 层驱动状态，重连成功后回房间）
   useEffect(() => {
     let wasDisconnected = false;
     const unsub = onStatusChange((status) => {
@@ -33,8 +28,6 @@ export default function RoomPanel() {
         wasDisconnected = true;
       } else if (status === "connected" && wasDisconnected) {
         wasDisconnected = false;
-        const code = codeRef.current;
-        const playerId = playerIdRef.current;
         if (code && playerId) {
           const playerName = localStorage.getItem("bg_player_name") || "";
           send({ type: "join_room", code, playerId, playerName });
@@ -42,7 +35,7 @@ export default function RoomPanel() {
       }
     });
     return unsub;
-  }, []);
+  }, [code, playerId]);
 
   useEffect(() => {
     const unsub = onMessage((msg: ServerMessage) => {
@@ -87,17 +80,17 @@ export default function RoomPanel() {
     send({ type: "vacate_seat" });
   }
 
-  if (!codeRef.current) return null;
+  if (!code) return null;
 
   return (
     <div className="panel-pop fixed top-3 right-3 z-50 p-3 min-w-[200px]">
       {/* sidebar-panel h3 风格：标题下方 2px 黑色横线 */}
-      <p className="text-sm font-mono text-secondary mb-2 pb-2 border-b-2 border-ink">房间: {codeRef.current}</p>
+      <p className="text-sm font-mono text-secondary mb-2 pb-2 border-b-2 border-ink">房间: {code}</p>
 
       <p className="text-[10px] text-muted mt-1 mb-0.5">座位</p>
       <ul>
         {seats.map((seat) => {
-          const isMe = seat.playerId === playerIdRef.current;
+          const isMe = seat.playerId === playerId;
           const occupied = !!seat.playerId;
           return (
             <li key={seat.id} className="text-sm py-0.5">
@@ -138,7 +131,7 @@ export default function RoomPanel() {
       <ul>
         {players.map((p) => (
           <li key={p.id} className="text-sm py-0.5">
-            🟢 {p.name}{p.id === playerIdRef.current ? "（自己）" : ""}
+            🟢 {p.name}{p.id === playerId ? "（自己）" : ""}
           </li>
         ))}
       </ul>
