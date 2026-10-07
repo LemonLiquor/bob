@@ -1,9 +1,11 @@
 import type { EntityState, GameState, Pile, Rotation, Size } from "./types";
 import { CARD_WIDTH, CARD_HEIGHT, OVERLAP_DISTANCE, TABLE_CENTER } from "./layout";
+import { diagLog } from "../diagnostics/log";
 
 // ============================================================
 // S9 引擎 — 自由坐标 + Pile。纯函数，不可变更新，零 UI 依赖
 // 注：动作字段仍叫 cardId（协议兼容），操作对象是实例 id（EntityState.id）
+// diagLog 仅记录内存诊断（落点 bug 排查期埋点，定位后移除）
 // ============================================================
 
 function findCard(state: GameState, cardId: string): EntityState | undefined {
@@ -153,10 +155,10 @@ function hasAncestor(state: GameState, targetId: string | undefined, ancestorId:
  * 落点 (x, y)（世界坐标，实体左上角，size 为落点实体渲染尺寸）中心命中的"宿主"实体。
  * 任意实体可做父（卡牌放 token 上、token 放卡牌上、版图嵌套…）；
  * 中心点在宿主世界矩形内；多个重叠取 zIndex 最高。
- * excludeId 排除自身；宿主位于自身后代链上的跳过（防自挂/成环）；
+ * excludeIds 排除自身/参与建堆的牌（堆成员不能做宿主）；宿主位于自身后代链上的跳过（防自挂/成环）；
  * 堆内/手牌实体不做宿主（其位置由堆/座位代表）。
  */
-function findHostAt(state: GameState, x: number, y: number, size?: Size, excludeId?: string): EntityState | undefined {
+function findHostAt(state: GameState, x: number, y: number, size?: Size, excludeIds: readonly string[] = []): EntityState | undefined {
   const w = size?.width ?? 120;
   const h = size?.height ?? 168;
   const cx = x + w / 2;
@@ -167,9 +169,9 @@ function findHostAt(state: GameState, x: number, y: number, size?: Size, exclude
 
   let hit: EntityState | undefined;
   for (const e of state.entities) {
-    if (e.id === excludeId) continue;
+    if (excludeIds.includes(e.id)) continue;
     if (inContainer(e.id)) continue;
-    if (hasAncestor(state, e.parentId, excludeId)) continue;
+    if (hasAncestor(state, e.parentId, excludeIds[0])) continue;
     const ew = worldOf(state, e);
     const s = effectiveSize(e);
     if (cx >= ew.x && cx <= ew.x + s.width && cy >= ew.y && cy <= ew.y + s.height) {
@@ -190,7 +192,7 @@ export function assignParents(state: GameState): GameState {
   const entities = state.entities.map((e) => {
     // 跳过：堆内实体（坐标是残留）/ 已有归属 / 版图自身（批量判定会互相包含成环，嵌套版图归属靠运行时放置写入）
     if (inPile.has(e.id) || e.parentId || e.kind === "board") return e;
-    const host = findHostAt(state, e.x, e.y, e.size, e.id);
+    const host = findHostAt(state, e.x, e.y, e.size, [e.id]);
     if (!host) return e;
     const hw = worldOf(state, host);
     return { ...e, parentId: host.id, x: e.x - hw.x, y: e.y - hw.y };
@@ -198,7 +200,7 @@ export function assignParents(state: GameState): GameState {
   const piles = state.piles.map((p) => {
     if (p.parentId) return p;
     const first = state.entities.find((e) => e.id === p.entityIds[0]);
-    const host = findHostAt(state, p.x, p.y, first?.size, p.id);
+    const host = findHostAt(state, p.x, p.y, first?.size, [p.id]);
     if (!host) return p;
     const hw = worldOf(state, host);
     return { ...p, parentId: host.id, x: p.x - hw.x, y: p.y - hw.y };
@@ -226,11 +228,18 @@ function placeAt(state: GameState, cardId: string, x: number, y: number): GameSt
   const card = findCard(state, cardId);
   if (!card) return state;
   const target = findOverlap(state, x, y, cardId);
+  diagLog("placeAt", {
+    cardId,
+    kind: card.kind,
+    drop: { x, y },
+    hit: target.pile ? { pile: target.pile.id, n: target.pile.entityIds.length } : target.card ? { card: target.card.id, size: target.card.size } : null,
+  });
 
   // 重叠 pile → 目标牌是版图或尺寸不同 → 不入堆（版图不可叠，自由放置）
   if (target.pile) {
     const pileCard = state.entities.find((e) => e.id === target.pile!.entityIds[0]);
     if (card.kind !== "board" && pileCard && pileCard.kind !== "board" && sameSize(pileCard, card)) {
+      diagLog("placeAt.decision", { branch: "into-pile", pile: target.pile.id });
       return {
         ...state,
         // 入堆：牌的归属由堆代表（堆的 parentId 管跟随），牌自身脱离版图
@@ -246,9 +255,12 @@ function placeAt(state: GameState, cardId: string, x: number, y: number): GameSt
   if (target.card) {
     const overlapCard = target.card; // 闭包内窄化不保留，提局部常量
     if (card.kind !== "board" && overlapCard.kind !== "board" && sameSize(overlapCard, card)) {
-      // 堆整体归属落点所在宿主实体（坐标换算相对，同自由放置语义）
-      const host = findHostAt(state, x, y, card.size);
+      // 堆整体归属落点所在宿主实体（坐标换算相对，同自由放置语义）。
+      // 排除两张参与建堆的牌：目标牌若躺在其他卡/版图上，宿主判定会命中它自己（zIndex 最高），
+      // pile 挂到堆成员牌下 + 其残留相对坐标换系 → 建堆后堆"跑到别处"
+      const host = findHostAt(state, x, y, card.size, [cardId, overlapCard.id]);
       const hw = host ? worldOf(state, host) : undefined;
+      diagLog("placeAt.decision", { branch: "new-pile", with: overlapCard.id, host: host?.id ?? null });
       const pile: Pile = {
         id: `pile-${Date.now()}`,
         entityIds: [overlapCard.id, cardId],
@@ -269,7 +281,8 @@ function placeAt(state: GameState, cardId: string, x: number, y: number): GameSt
   // 空处 / 尺寸不同 → 自由坐标，zIndex 置顶。
   // 坐标语义：命中宿主实体（任意 kind）→ parentId 写宿主 + x/y 换算为相对坐标；否则 parentId 清 + x/y 保持世界坐标
   const z = maxZIndex(state) + 1;
-  const host = findHostAt(state, x, y, card.size, card.id);
+  const host = findHostAt(state, x, y, card.size, [card.id]);
+  diagLog("placeAt.decision", { branch: "free", host: host?.id ?? null, hostKind: host?.kind ?? null });
   if (host) {
     const hw = worldOf(state, host);
     return {
@@ -292,6 +305,12 @@ function placeAt(state: GameState, cardId: string, x: number, y: number): GameSt
 export function moveCard(state: GameState, cardId: string, x: number, y: number): GameState {
   const card = findCard(state, cardId);
   if (!card) return state;
+  diagLog("moveCard", {
+    cardId,
+    kind: card.kind,
+    from: { x: card.x, y: card.y, parent: card.parentId ?? null },
+    to: { x, y },
+  });
   // 版图移动 = 普通移动（x/y 世界坐标）：子实体存相对坐标，无需引擎联动，渲染 DOM 层级天然跟随
   const removed = removeCard(state, cardId);
   return pruneEmptyPiles(placeAt(removed, cardId, x, y));
@@ -408,6 +427,7 @@ export function movePile(state: GameState, pileId: string, x: number, y: number)
     const pw = worldOf(state, p);
     return distance(scx, scy, pw.x + ts.width / 2, pw.y + ts.height / 2) < threshold;
   });
+  diagLog("movePile.decision", { pileId, drop: { x, y }, mergedInto: target?.id ?? null });
   if (target) {
     const movedIds = new Set(pile.entityIds);
     return {
@@ -422,6 +442,7 @@ export function movePile(state: GameState, pileId: string, x: number, y: number)
 
   // ② 落点重判归属（任意实体可做宿主）
   const host = findHostAt(state, x, y, fs);
+  diagLog("movePile.decision", { pileId, branch: host ? `host:${host.id}(${host.kind})` : "free", x, y });
   if (host) {
     const hw = worldOf(state, host);
     return {

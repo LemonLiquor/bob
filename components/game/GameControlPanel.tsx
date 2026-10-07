@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { send, onMessage } from "@/lib/multiplayer/transport";
+import { downloadDiagnostics } from "@/lib/diagnostics/log";
 import type { GamePreset } from "@/lib/engine";
 
 // ============================================================
@@ -158,6 +159,14 @@ export default function GameControlPanel({
             onClick={onExit}
           >
             {exitLabel}
+          </button>
+
+          <button
+            className="btn-ghost w-full text-[11px] text-muted"
+            title="导出拖拽/落点诊断日志（前端内存缓冲，下载 .log 并复制到剪贴板）"
+            onClick={() => downloadDiagnostics()}
+          >
+            🐞 导出诊断日志
           </button>
 
           <p className="text-[11px] text-muted mt-1">按 ESC 关闭</p>

@@ -1,6 +1,7 @@
 import http from "node:http";
 import next from "next";
 import { createGameWss, isWsPath } from "./game-ws";
+import { attachEngineDiagSink } from "./diag";
 
 /**
  * 统一端口服务（custom server）：一个进程一个端口同时服务
@@ -17,6 +18,9 @@ const dev = !args.includes("--prod");
 const PORT = Number(process.env.PORT ?? 3000);
 const hostIdx = args.indexOf("--host");
 const HOST = hostIdx >= 0 ? args[hostIdx + 1] : "localhost";
+
+// 引擎 diagLog（多人权威模式在服务端执行）→ server/data/logs/server.log
+attachEngineDiagSink();
 
 const app = next({ dev, turbopack: dev });
 

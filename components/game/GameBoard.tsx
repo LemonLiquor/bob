@@ -13,13 +13,14 @@ import Pile from "@/components/game/Pile";
 import Card from "@/components/game/Card";
 import HandZone from "@/components/game/HandZone";
 import OtherHandBar from "@/components/game/OtherHandBar";
-import { applyAction, createSeat, findCards, assignParents, worldOf, deriveScene } from "@/lib/engine";
+import { applyAction, createSeat, findCards, assignParents, deriveScene } from "@/lib/engine";
 import { getPrefabFaces } from "@/lib/assets/cache";
 import { CardActionProvider } from "@/lib/engine/card-action";
 import type { GameAction, GameState, EntityState } from "@/lib/engine";
 import { sessionStore } from "@/lib/multiplayer/session";
 import { useViewport } from "./useViewport";
 import { useEntityPreview } from "./useEntityPreview";
+import { diagLog } from "@/lib/diagnostics/log";
 
 // ============================================================
 // GameBoard — S9 自由坐标 + Pile + 手牌区（屏幕 UI 组件）
@@ -168,11 +169,13 @@ export default function GameBoard({ gameState: propState, onAction, initialState
       const pileId = id.slice("pile-move-".length);
       const el = document.getElementById(`pile-${pileId}`);
       const rect = el?.getBoundingClientRect();
+      diagLog("dragStart", { active: id, pileId, rectFound: !!el, rect: rect ? { left: rect.left, top: rect.top } : null });
       dragStartRef.current = { kind: "pile", pileId, x: rect?.left ?? 0, y: rect?.top ?? 0 };
     } else {
       // 卡：视觉坐标（视口坐标 = 桌面坐标）：自由牌 / pile 顶牌 / 手牌区牌通用
       const el = document.getElementById(id);
       const rect = el?.getBoundingClientRect();
+      diagLog("dragStart", { active: id, rectFound: !!el, rect: rect ? { left: rect.left, top: rect.top } : null });
       dragStartRef.current = { kind: "card", cardId: id, x: rect?.left ?? 0, y: rect?.top ?? 0 };
     }
     setDragDelta({ x: 0, y: 0 });
@@ -203,6 +206,11 @@ export default function GameBoard({ gameState: propState, onAction, initialState
 
     const translated = active.rect.current.translated;
     if (!translated) return;
+    diagLog("dragEnd", {
+      start,
+      over: over ? String(over.id) : null,
+      translated: { left: translated.left, top: translated.top },
+    });
 
     // 整堆移动：防误触（几乎没移动则不处理）；落点视口 → 桌面
     if (start.kind === "pile") {
@@ -222,24 +230,16 @@ export default function GameBoard({ gameState: propState, onAction, initialState
       return;
     }
 
-    // 牌堆：对齐 pile 中心（版图不入堆 → 自由放置到 pile 位置）
-    if (overId && overId.startsWith("pile-") && !overId.startsWith("pile-move-")) {
-      const pile = gameState.piles.find((p) => p.id === overId);
-      if (pile) {
-        // 落点必须是世界坐标：pile 在版图上时 x/y 是相对坐标，需 worldOf 换算（否则判定错乱、牌脱版图）
-        const w = worldOf(gameState, pile);
-        dispatch({ type: "move_card", cardId, x: w.x, y: w.y });
-        return;
-      }
-    }
-
-    // 桌面：落点 = 拖拽中真实位置（translated 视口坐标 → 桌面坐标）
-    // 版图旋转 = 有效尺寸分支渲染，包围盒恒等于引擎坐标，无额外换算
+    // 桌面：落点 = 拖拽中真实位置（translated 视口坐标 → 桌面坐标）。
+    // 入堆/建堆/自由放置由引擎 placeAt 的 findOverlap 统一判定（中心距阈值 + 尺寸匹配）——
+    // 这里不再按 over 命中的 pile 替换坐标：那会把异尺寸牌/版图错误吸附到堆的位置
+    // （历史 bug：拖版图到堆上，版图落到堆位置而非鼠标位置）
     const p = toDesk(translated.left, translated.top);
     const x = p.x;
     const y = p.y;
     // 防误触：几乎没移动则不处理（比较仍用视口坐标）
     if (Math.abs(translated.left - start.x) > 2 || Math.abs(translated.top - start.y) > 2) {
+      diagLog("dragEnd.dispatch", { action: "move_card", x, y });
       dispatch({ type: "move_card", cardId, x, y });
     }
   }

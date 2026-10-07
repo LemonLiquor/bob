@@ -74,6 +74,44 @@ describe("moveCard 堆叠", () => {
     expect(after.entities.find((e) => e.id === "big")?.x).toBe(a.x);
   });
 
+  it("异尺寸牌拖到牌堆上 → 不入堆，落在鼠标位置（不吸附堆）", () => {
+    const a = entity("a", 100, 100);
+    const b = entity("b", 100, 100);
+    const big = entity("big", 500, 500, { size: { width: 394, height: 394 } });
+    const s: GameState = {
+      ...emptyState([a, b, big]),
+      piles: [{ id: "pile-0", entityIds: ["a", "b"], x: 100, y: 100 }],
+    };
+    const after = moveCard(s, "big", 100, 100);
+    expect(after.piles).toHaveLength(1); // 未入堆
+    expect(after.entities.find((e) => e.id === "big")?.x).toBe(100); // 落点 = 鼠标位置
+  });
+
+  it("版图拖到牌堆上 → 不入堆、自由放置", () => {
+    const a = entity("a", 100, 100);
+    const b = entity("b", 100, 100);
+    const board = entity("bd", 500, 500, { kind: "board", size: { width: 800, height: 600 } });
+    const s: GameState = {
+      ...emptyState([a, b, board]),
+      piles: [{ id: "pile-0", entityIds: ["a", "b"], x: 100, y: 100 }],
+    };
+    const after = moveCard(s, "bd", 100, 100);
+    expect(after.piles).toHaveLength(1);
+    expect(after.entities.find((e) => e.id === "bd")?.parentId).toBeUndefined();
+  });
+
+  it("目标牌躺在版图上时建堆 → pile 挂版图，不挂堆成员牌（坐标不漂移）", () => {
+    // 版图 B 世界位置 (500,400)；牌 X 在版图上（parentId=B，相对坐标 50,40 → 世界 550,440）
+    const board = entity("B", 500, 400, { kind: "board", size: { width: 800, height: 600 } });
+    const x = entity("X", 50, 40, { parentId: "B", zIndex: 2 });
+    const c = entity("c", 900, 900);
+    const after = moveCard(emptyState([board, x, c]), "c", 550, 440); // 拖到牌 X 上
+    const pile = after.piles.find((p) => p.entityIds.includes("c"));
+    expect(pile).toBeDefined();
+    expect(pile!.parentId).toBe("B"); // 挂版图，而不是堆成员牌 X
+    expect(pile!.x).toBe(50); // 相对版图 = 鼠标世界位置 550 - 版图 500
+  });
+
   it("堆顶牌拖到同尺寸牌堆 → 入堆；源堆剩牌不解散", () => {
     const a = entity("a", 100, 100);
     const b = entity("b", 100, 100);

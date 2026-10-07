@@ -3,6 +3,7 @@ import type { ClientMessage, ServerMessage } from "../lib/multiplayer/protocol";
 import { RoomManager } from "./room-manager";
 import type { GameLibrary } from "./game-library";
 import { applyAction, dropHandToTable } from "../lib/engine";
+import { serverDiag } from "./diag";
 import type { GamePreset, GameState } from "../lib/engine/types";
 
 // ============================================================
@@ -95,8 +96,16 @@ export function handleMessage(
 
       let newState = state;
       const { action } = parsed;
+      serverDiag("game_action", {
+        action,
+        moved: action.type === "move_card" || action.type === "move_pile" ? { x: action.x, y: action.y } : undefined,
+      });
       // 动作注册表统一分发（与客户端共用一份 reducer），服务端顺序应用即权威
       newState = applyAction(state, action);
+      serverDiag("game_action.applied", {
+        action: action.type,
+        changed: newState !== state,
+      });
 
       if (newState !== state) {
         roomManager.updateGameState(ws, newState);
