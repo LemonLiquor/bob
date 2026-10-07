@@ -5,7 +5,7 @@ import { walkObjects, flattenUrl, type TtsObject } from "./parse";
 // TTS 状态映射（S3）— Save 对象树 → 标准桌游包（meta + assets + initialState）
 // 卡牌自描述（实测确认）：每张卡自带 CustomDeck + CardID；
 //   图集键 = floor(CardID / 100)，格序号 = CardID - 键×100（行优先展开）
-// 卡背（TTS 语义，实测以撒 mod 确认）：UniqueBack=1 → BackURL 与正面同网格（每卡独立背）；
+// 卡背（TTS 语义，实测真实 TTS 模组确认）：UniqueBack=1 → BackURL 与正面同网格（每卡独立背）；
 //   UniqueBack=0 → BackURL 为整副共用的一张完整卡背图（按 1×1 切，所有卡取 0 号格）
 // 等效映射：袋 → pile（无限袋内容 ×5，内容物按类型发放）、
 //   Die/Custom_Dice → die（F 掷骰）、Counter → die（±1）、
@@ -56,7 +56,7 @@ const CARD_UNITS = { w: 2.5, h: 3.5 }; // TTS 标准卡网格
 const PLANE_UNITS = 2; // Custom_Token/Tile 默认平面网格（假设 2×2，实测可调）
 const DIE_UNITS = 0.75; // 标准骰网格
 const MIN_SIDE = 32; // 非卡实体最小边（过小不可点）
-// TTS 自定义骰贴图模板（实测以撒 mod 确认）：3×3 网格，顶行 3 格为底色占位；1..6 点 = 格 3..8（行优先）
+// TTS 自定义骰贴图模板（实测真实 TTS 模组确认）：3×3 网格，顶行 3 格为底色占位；1..6 点 = 格 3..8（行优先）
 const DIE_FACE_GRID = { cols: 3, rows: 3 };
 const DIE_FACE_BASE = 3;
 const MARKER_MIN_W = 80; // 占位标记最小边（便签文字可读）

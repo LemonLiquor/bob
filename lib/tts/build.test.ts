@@ -6,13 +6,14 @@ import { applyAction } from "../engine/reducers";
 import { pruneUnusedAssets } from "../engine/prune-assets";
 
 // ============================================================
-// TTS 管线测试 — 真实存档端到端（本地 Mod 文件存在才跑，CI/他人机器自动 skip）
-// 覆盖：卡背语义 / 空堆 / 双面 token / 占位标记 / 骰子可视化 / prune
+// TTS 管线测试 — 真实存档端到端
+// fixture 路径通过环境变量提供（不入库）：未设置则整组 skip。
+// 本地跑：BOB_TTS_FIXTURE_SAVE=<存档 json> BOB_TTS_FIXTURE_IMG=<Images 目录> npm test
 // ============================================================
 
-const REAL_SAVE = "E:/Downloads/桌游/Mods/Workshop/1621070501.json";
-const REAL_IMG_DIR = "E:/Downloads/桌游/Mods/Images";
-const hasRealData = fs.existsSync(REAL_SAVE) && fs.existsSync(REAL_IMG_DIR);
+const REAL_SAVE = process.env.BOB_TTS_FIXTURE_SAVE ?? "";
+const REAL_IMG_DIR = process.env.BOB_TTS_FIXTURE_IMG ?? "";
+const hasRealData = !!REAL_SAVE && !!REAL_IMG_DIR && fs.existsSync(REAL_SAVE) && fs.existsSync(REAL_IMG_DIR);
 
 let result: TtsBuildResult;
 let save: { SaveName?: string; ObjectStates: unknown[] };
@@ -41,7 +42,7 @@ beforeAll(async () => {
   result = await buildTtsGame(save as never, deps as never);
 }, 30000);
 
-describe.skipIf(!hasRealData)("buildTtsGame — 以撒真实存档", () => {
+describe.skipIf(!hasRealData)("buildTtsGame — 本地 TTS 存档 fixture", () => {
   const spriteById = (r: TtsBuildResult) => new Map(r.assets.sprites.map((s) => [s.id, s]));
 
   it("库存报告：S1 计数含占位标记", () => {
@@ -77,16 +78,16 @@ describe.skipIf(!hasRealData)("buildTtsGame — 以撒真实存档", () => {
     }
   });
 
-  it("说明书：双面 token 且只发一张，flip_token 生效", () => {
+  it("说明书类双面 tile：token 带背面且只发一张，flip_token 生效", () => {
     const sprites = spriteById(result);
-    const bookFront = [...sprites.values()].find((s) => s.url.includes("77771b66d"));
-    expect(bookFront).toBeDefined();
-    const bookPrefab = result.assets.prefabs.find(
-      (p) => p.kind === "token" && p.faces.front === bookFront!.id,
+    // 任取一个有背面的 token（fixture 里即双面说明书 tile，不依赖具体素材标识）
+    const doubleSided = result.assets.prefabs.filter(
+      (p): p is Extract<typeof p, { kind: "token" }> =>
+        p.kind === "token" && !!p.faces.back && sprites.has(p.faces.back),
     );
-    expect(bookPrefab).toBeDefined();
-    expect(bookPrefab!.kind === "token" && bookPrefab.faces.back).toBeTruthy();
-    const entities = result.initialState.entities.filter((e) => e.prefabId === bookPrefab!.id);
+    expect(doubleSided.length).toBeGreaterThan(0);
+    const bookPrefab = doubleSided[0];
+    const entities = result.initialState.entities.filter((e) => e.prefabId === bookPrefab.id);
     expect(entities).toHaveLength(1);
     const flipped = applyAction(result.initialState, { type: "flip_token", entityId: entities[0].id });
     expect(flipped.entities.find((e) => e.id === entities[0].id)?.faceUp).toBe(false);
@@ -98,7 +99,7 @@ describe.skipIf(!hasRealData)("buildTtsGame — 以撒真实存档", () => {
     const markers = result.initialState.entities.filter((e) => {
       const p = prefabById.get(e.prefabId);
       if (!p || p.kind === "die") return false;
-      const front = p.kind === "die" ? "" : sprites.get(p.faces.front)?.url ?? "";
+      const front = sprites.get(p.faces.front)?.url ?? "";
       return front.startsWith("marker:");
     });
     expect(markers).toHaveLength(37);
