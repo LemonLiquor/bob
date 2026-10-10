@@ -5,6 +5,7 @@ import type { Pile as PileType, EntityState } from "@/lib/engine";
 import { useDroppable, useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { stackLayout } from "@/lib/engine/layout";
+import { getPrefabFaces, getPrefabSize } from "@/lib/assets/cache";
 import Card from "./Card";
 
 interface PileProps {
@@ -28,7 +29,10 @@ export default function Pile({ pile, cards, onShuffle, onFlipPile, shiftHeld, zo
   const [isHovered, setIsHovered] = useState(false);
 
   const count = cards.length;
-  const offsets = stackLayout(count);
+  const visibleCount = Math.min(count, PILE_EDGE_COUNT + 1);
+  // 偏移本地化：可见卡簇锚定堆基座（第 k 张渲染在 k*0.5px），不照搬 stackLayout 的全堆累加偏移
+  // ——否则大堆只渲染顶部几张时，整簇悬空在基座右下方（性能切片回归，已修）
+  const offsets = stackLayout(visibleCount);
 
   // 容器尺寸跟随堆内实体（缺省 120×168 卡牌）
   const first = cards[0];
@@ -97,19 +101,23 @@ export default function Pile({ pile, cards, onShuffle, onFlipPile, shiftHeld, zo
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* 堆叠的牌：只有顶部可拖（Shift 按住时顶牌禁拖，交给容器整堆） */}
-      {cards.map((card, i) => (
+      {/* 堆叠视觉：顶牌 = 完整 Card（可拖 + 快捷键载体）；顶牌之下最多 3 张降级为纯 div/img
+          （无 hooks，性能切片 M2），更深的成员不渲染——0.5px 阶梯在亚像素级，且张数角标已示数。
+          状态保留全部成员，洗牌/翻整叠/抓牌语义不变 */}
+      {cards.slice(count - visibleCount, count - 1).map((card, k) => (
+        <PileEdge key={card.id} card={card} offset={offsets[k]} />
+      ))}
+      {cards[count - 1] && (
         <div
-          key={card.id}
           style={{
             position: "absolute",
-            left: offsets[i].offsetX,
-            top: offsets[i].offsetY,
+            left: offsets[visibleCount - 1].offsetX,
+            top: offsets[visibleCount - 1].offsetY,
           }}
         >
-          <Card card={card} draggable={i === count - 1 && !shiftHeld} zoom={zoom} />
+          <Card card={cards[count - 1]} draggable={!shiftHeld} zoom={zoom} />
         </div>
-      ))}
+      )}
 
       {/* hover 顶部提示（左对齐，底边贴在容器顶框上方 4px，新增行自动向上扩展）：整体移动 + 洗牌 */}
       {isHovered && count > 1 && (
@@ -128,6 +136,32 @@ export default function Pile({ pile, cards, onShuffle, onFlipPile, shiftHeld, zo
         {count}
       </div>
 
+    </div>
+  );
+}
+
+/** 顶牌之下最多渲染几张降级边缘（纯 div/img） */
+const PILE_EDGE_COUNT = 3;
+
+/** 堆内下层牌的降级渲染：视觉对齐 Card（尺寸/圆角/阴影/面图），但不挂任何 hooks、
+ *  不带 data-card-id（埋牌不再响应 hover 快捷键——交互语义收敛到顶牌） */
+function PileEdge({ card, offset }: { card: EntityState; offset: { offsetX: number; offsetY: number } }) {
+  const faces = getPrefabFaces(card.prefabId);
+  const size = getPrefabSize(card.prefabId) ?? { width: 120, height: 168 };
+  const showFront = (card.kind === "card" || card.kind === "token") ? card.faceUp : true;
+  const src = showFront ? faces?.[0] : faces?.[1];
+  return (
+    <div
+      className="absolute rounded-lg overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.15)]"
+      style={{
+        left: offset.offsetX,
+        top: offset.offsetY,
+        width: size.width,
+        height: size.height,
+        backgroundColor: src ? undefined : card.faceUp ? "#ffffff" : "#1e3a5f",
+      }}
+    >
+      {src && <img src={src} alt="" className="w-full h-full object-cover" />}
     </div>
   );
 }

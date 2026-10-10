@@ -14,7 +14,7 @@ import Card from "@/components/game/Card";
 import HandZone from "@/components/game/HandZone";
 import OtherHandBar from "@/components/game/OtherHandBar";
 import { applyAction, createSeat, findCards, assignParents, deriveScene } from "@/lib/engine";
-import { getPrefabFaces } from "@/lib/assets/cache";
+import { getPrefabFaces, getPrefabSize } from "@/lib/assets/cache";
 import { CardActionProvider } from "@/lib/engine/card-action";
 import type { GameAction, GameState, EntityState } from "@/lib/engine";
 import { sessionStore } from "@/lib/multiplayer/session";
@@ -250,6 +250,39 @@ export default function GameBoard({ gameState: propState, onAction, initialState
     [gameState, activeId, dragDelta, view.zoom],
   );
 
+  // 视口裁剪（性能切片 M3）：视口外实体/堆不挂 DOM；判定在渲染层，deriveScene 保持全量场景语义
+  const [mainSize, setMainSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const update = () =>
+      setMainSize((prev) =>
+        prev.w === el.clientWidth && prev.h === el.clientHeight ? prev : { w: el.clientWidth, h: el.clientHeight },
+      );
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [mainRef]);
+
+  const CULL_MARGIN = 160; // 桌面坐标余量：阴影/堆阶梯/拖拽甩入不闪烁
+  const visibleRect = useMemo(() => {
+    const x0 = -view.x / view.zoom;
+    const y0 = -view.y / view.zoom;
+    return {
+      x0: x0 - CULL_MARGIN,
+      y0: y0 - CULL_MARGIN,
+      x1: x0 + mainSize.w / view.zoom + CULL_MARGIN,
+      y1: y0 + mainSize.h / view.zoom + CULL_MARGIN,
+    };
+  }, [view, mainSize]);
+
+  const isVisible = useCallback(
+    (x: number, y: number, w: number, h: number) =>
+      x + w >= visibleRect.x0 && x <= visibleRect.x1 && y + h >= visibleRect.y0 && y <= visibleRect.y1,
+    [visibleRect],
+  );
+
   return (
     <main
       ref={mainRef}
@@ -297,30 +330,40 @@ export default function GameBoard({ gameState: propState, onAction, initialState
                 pointerEvents: "none",
               }}
             />
-            {/* 平铺实体层：坐标与 z 全部来自场景派生（lib/engine/scene.ts） */}
-            {scene.entities.map((s) =>
-              s.entity.kind === "board" ? (
+            {/* 平铺实体层：坐标与 z 全部来自场景派生（lib/engine/scene.ts）；视口外不挂 DOM，
+                被拖实体豁免（跟随鼠标必须可见） */}
+            {scene.entities.map((s) => {
+              const w = s.entity.size?.width ?? getPrefabSize(s.entity.prefabId)?.width ?? 120;
+              const h = s.entity.size?.height ?? getPrefabSize(s.entity.prefabId)?.height ?? 168;
+              if (s.id !== activeId && !isVisible(s.x, s.y, w, h)) return null;
+              return s.entity.kind === "board" ? (
                 <FlatBoard key={s.id} board={s.entity} pos={{ x: s.x, y: s.y }} z={s.z} zoom={view.zoom} />
               ) : (
                 <div key={s.id} style={{ position: "absolute", left: s.x, top: s.y, zIndex: s.z }}>
                   <Card card={s.entity} draggable zoom={view.zoom} />
                 </div>
-              ),
-            )}
+              );
+            })}
 
-            {/* 平铺牌堆层：堆内牌渲染在 Pile 内部（自包含单元，无需逃逸） */}
-            {scene.piles.map((s) => (
-              <div key={s.id} style={{ position: "absolute", left: s.x, top: s.y, zIndex: s.z || undefined }}>
-                <Pile
-                  pile={s.pile}
-                  cards={findCards(gameState, s.pile.entityIds)}
-                  onShuffle={handleShufflePile}
-                  onFlipPile={handleFlipPile}
-                  shiftHeld={shiftHeld}
-                  zoom={view.zoom}
-                />
-              </div>
-            ))}
+            {/* 平铺牌堆层：堆内牌渲染在 Pile 内部（自包含单元，无需逃逸）；被拖堆豁免 */}
+            {scene.piles.map((s) => {
+              const pileCards = findCards(gameState, s.pile.entityIds);
+              const w = s.pile.entityIds.length * 0.5 + (pileCards[0]?.size?.width ?? 120);
+              const h = pileCards[0]?.size?.height ?? 168;
+              if (`pile-move-${s.id}` !== activeId && !isVisible(s.x, s.y, w, h)) return null;
+              return (
+                <div key={s.id} style={{ position: "absolute", left: s.x, top: s.y, zIndex: s.z || undefined }}>
+                  <Pile
+                    pile={s.pile}
+                    cards={pileCards}
+                    onShuffle={handleShufflePile}
+                    onFlipPile={handleFlipPile}
+                    shiftHeld={shiftHeld}
+                    zoom={view.zoom}
+                  />
+                </div>
+              );
+            })}
           </div>
 
           {/* 自己的手牌区（屏幕底部，spread 展开） */}

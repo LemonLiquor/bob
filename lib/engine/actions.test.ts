@@ -53,6 +53,35 @@ describe("moveCard 堆叠", () => {
     expect(after.piles[0].entityIds.sort()).toEqual(["a", "b"]);
   });
 
+  it("多卡层叠不成堆时建堆 → 宿主不命中同簇散牌（堆落落点不漂移）", () => {
+    // 三张散牌层叠在 (400,300) 附近（如手牌退桌场景），互相独立不成堆
+    const a = entity("a", 395, 295, { zIndex: 1 });
+    const b = entity("b", 400, 300, { zIndex: 2 });
+    const c = entity("c", 405, 305, { zIndex: 3 });
+    const x = entity("x", 0, 0, { zIndex: 4 });
+    const after = moveCard(emptyState([a, b, c, x]), "x", 400, 300);
+    expect(after.piles).toHaveLength(1);
+    const pile = after.piles[0];
+    expect(pile.entityIds.sort()).toEqual(["a", "x"]);
+    // b/c 与落点中心距 < 阈值，属同簇散牌：不做宿主（否则其被拖走/入堆会带着整堆漂移）
+    expect(pile.parentId).toBeUndefined();
+    expect(pile.x).toBe(400);
+    expect(pile.y).toBe(300);
+  });
+
+  it("层叠散牌躺在版图上时建堆 → 堆仍挂版图（相对坐标正确）", () => {
+    const board = entity("bd", 1000, 1000, { kind: "board", size: { width: 800, height: 600 } });
+    const a = entity("a", 95, 95, { parentId: "bd", zIndex: 1 });
+    const b = entity("b", 100, 100, { parentId: "bd", zIndex: 2 });
+    const x = entity("x", 0, 0, { zIndex: 4 });
+    const after = moveCard(emptyState([board, a, b, x]), "x", 1100, 1100);
+    expect(after.piles).toHaveLength(1);
+    const pile = after.piles[0];
+    expect(pile.parentId).toBe("bd");
+    expect(pile.x).toBe(100); // 落点 1100 - 版图世界坐标 1000
+    expect(pile.y).toBe(100);
+  });
+
   it("自由牌拖到牌堆位置 → 入堆顶部", () => {
     const a = entity("a", 100, 100);
     const b = entity("b", 100, 100);

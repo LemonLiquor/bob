@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { EntityKind, EntityState, GameAction, GameAssets, GameState, Prefab, Size, Sprite } from "@/lib/engine/types";
+import type { EntityState, GameAction, GameAssets, GameState, Prefab, Size, Sprite } from "@/lib/engine/types";
 import { applyAction, removeEntity, assignParents } from "@/lib/engine";
 import { setAssets } from "@/lib/assets/cache";
 import { buildGameFromGroups, type EntityGroup } from "@/lib/pnp/crop";

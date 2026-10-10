@@ -256,9 +256,24 @@ function placeAt(state: GameState, cardId: string, x: number, y: number): GameSt
     const overlapCard = target.card; // 闭包内窄化不保留，提局部常量
     if (card.kind !== "board" && overlapCard.kind !== "board" && sameSize(overlapCard, card)) {
       // 堆整体归属落点所在宿主实体（坐标换算相对，同自由放置语义）。
-      // 排除两张参与建堆的牌：目标牌若躺在其他卡/版图上，宿主判定会命中它自己（zIndex 最高），
-      // pile 挂到堆成员牌下 + 其残留相对坐标换系 → 建堆后堆"跑到别处"
-      const host = findHostAt(state, x, y, card.size, [cardId, overlapCard.id]);
+      // 宿主排除：① 两张参与建堆的牌（目标牌躺在别处时宿主判定会命中它自己，zIndex 最高）；
+      // ② 落点阈值内的其他自由散牌——多卡层叠不成堆时它们全是宿主候选，堆挂到某张散牌下，
+      //    该牌日后被拖走/入堆就带着整堆漂移（8e40293 同族漏网：当时只排除了①）
+      const exclude = new Set<string>([cardId, overlapCard.id]);
+      const dropC = centerOf(x, y);
+      for (const e of state.entities) {
+        if (exclude.has(e.id) || e.kind !== "card") continue;
+        if (
+          state.piles.some((p) => p.entityIds.includes(e.id)) ||
+          state.seats.some((s) => s.handZone.entityIds.includes(e.id))
+        ) continue;
+        const ew = worldOf(state, e);
+        const ec = centerOf(ew.x, ew.y);
+        const s = e.size ?? { width: 120, height: 168 };
+        const th = Math.min(OVERLAP_DISTANCE, Math.min(s.width, s.height) / 2);
+        if (distance(dropC.cx, dropC.cy, ec.cx, ec.cy) < th) exclude.add(e.id);
+      }
+      const host = findHostAt(state, x, y, card.size, [...exclude]);
       const hw = host ? worldOf(state, host) : undefined;
       diagLog("placeAt.decision", { branch: "new-pile", with: overlapCard.id, host: host?.id ?? null });
       const pile: Pile = {

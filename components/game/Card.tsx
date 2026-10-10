@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import type { EntityState } from "@/lib/engine";
 import { getPrefabFaces, getPrefabSize } from "@/lib/assets/cache";
 import { useDraggable } from "@dnd-kit/core";
@@ -15,7 +16,7 @@ interface CardProps {
   zoom?: number; // 所在容器缩放倍数：拖拽位移（视口）÷zoom 使视觉跟手
 }
 
-export default function Card({ card, children, draggable = false, zoom = 1 }: CardProps) {
+function Card({ card, children, draggable = false, zoom = 1 }: CardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: card.id,
     disabled: !draggable,
@@ -109,3 +110,6 @@ export default function Card({ card, children, draggable = false, zoom = 1 }: Ca
     </div>
   );
 }
+
+// memo：entity 引用由不可变更新天然稳定，props 浅比较挡住拖动帧的无关重渲染（性能切片 M4）
+export default memo(Card);
