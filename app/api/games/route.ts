@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     return fail("INVALID_BODY", firstIssue(parsed.error));
   }
 
-  // 转发：上游就是同进程的 custom-server（持有唯一的 GameLibrary 实例）
+  // 转发：上游就是同进程的 index.ts（持有唯一的 GameLibrary 实例）
   let upstream: Response;
   try {
     upstream = await fetch(internalGamesUrl(), {

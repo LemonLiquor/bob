@@ -5,7 +5,7 @@ import type { GameLibrary, SavedGame } from "./game-library";
 /**
  * 进程内上游接口：只给 BFF 的 Route Handler 用，浏览器不应该直接打得通。
  *
- * 存在的唯一理由：custom-server 里那一个 GameLibrary 实例是桌游库的唯一事实来源
+ * 存在的唯一理由：index.ts 里那一个 GameLibrary 实例是桌游库的唯一事实来源
  * （内存 Map + server/data/games 下的文件），Route Handler 拿不到同一个实例，只能通过这里转一手。
  */
 

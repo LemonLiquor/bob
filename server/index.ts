@@ -6,12 +6,12 @@ import { GameLibrary } from "./game-library";
 import { createInternalHandler, isInternalPath } from "./internal-api";
 
 /**
- * 统一端口服务（custom server）：一个进程一个端口同时服务
+ * 统一端口服务：一个进程一个端口同时服务
  * - HTTP 请求 → Next（页面 + 静态资源）
  * - /ws upgrade → 游戏服 ws
  * - 其余 upgrade（/_next/webpack-hmr 等）→ 交还 Next（dev 热更新）
  *
- * dev：  npm run dev           （tsx server/custom-server.ts）
+ * dev：  npm run dev           （tsx server/index.ts）
  * lan：  npm run dev:lan       （--host 0.0.0.0）
  * prod： npm start             （--prod，需先 next build）
  */

@@ -7,7 +7,7 @@
 const MAX_ENTRIES = 800;
 const buffer: { t: number; tag: string; data: string }[] = [];
 
-// 服务端宿主可注入落盘 sink（custom-server 启动时 setDiagSink）：
+// 服务端宿主可注入落盘 sink（index.ts 启动时 setDiagSink）：
 // 引擎跑在服务端进程时（多人权威模式），diagLog 同步写 server.log，否则只进内存
 let sink: ((line: string) => void) | null = null;
 

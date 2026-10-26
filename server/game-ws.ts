@@ -7,9 +7,9 @@ export const WS_PATH = "/ws";
 
 /**
  * 游戏服 ws 逻辑（noServer 模式）：只负责连接后的消息处理，
- * HTTP server 的 upgrade 路由由宿主决定（custom-server）
+ * HTTP server 的 upgrade 路由由宿主决定（index.ts）
  *
- * gameLibrary 可外部注入：custom-server 要把同一个实例同时给 ws 和 /internal/* 用，
+ * gameLibrary 可外部注入：index.ts 要把同一个实例同时给 ws 和 /internal/* 用，
  * 两个实例会各记一份内存 Map，导致覆盖保护和列表不一致。
  */
 export function createGameWss(lib?: GameLibrary): WebSocketServer {

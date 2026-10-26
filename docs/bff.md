@@ -15,9 +15,9 @@ Lab doUpload()
 
 ## 为什么 Route 不直接 import GameLibrary
 
-Next 的 Route Handler 与 custom-server 是**两套模块图**，各自会加载一份 `game-library.ts`，于是出现两个 `GameLibrary` 实例：内存里的 `Map` 各记一份，「同 id 已存在就拒绝覆盖」的保护会失效，列表也可能不同步。
+Next 的 Route Handler 与 index.ts（统一端口入口）是**两套模块图**，各自会加载一份 `game-library.ts`，于是出现两个 `GameLibrary` 实例：内存里的 `Map` 各记一份，「同 id 已存在就拒绝覆盖」的保护会失效，列表也可能不同步。
 
-所以：`custom-server.ts` 建唯一实例并注入给 `createGameWss(lib)`，Route 通过 HTTP 打回同进程的 `/internal/games`。代价是多一次本地 HTTP 往返（同进程，可忽略）；收益是单实例语义不被破坏。
+所以：`index.ts` 建唯一实例并注入给 `createGameWss(lib)`，Route 通过 HTTP 打回同进程的 `/internal/games`。代价是多一次本地 HTTP 往返（同进程，可忽略）；收益是单实例语义不被破坏。
 
 ## 错误码
 
@@ -41,7 +41,7 @@ Next 的 Route Handler 与 custom-server 是**两套模块图**，各自会加�
 - 流式读请求体：`req.body.getReader()` 逐块累加，超限 `reader.cancel()`（不是先 `req.text()` 读完再判断，那样上限形同虚设）
 - `Buffer.from` / `Buffer.concat` 拼块，`toString("utf-8")` 转字符串
 - `node:http` 的 `IncomingMessage` 异步迭代读上游 body、`writeHead` 手写响应
-- custom-server 在 `createServer` 里按路径分流（`/internal/*` 不走 Next 路由表）
+- `index.ts` 在 `createServer` 里按路径分流（`/internal/*` 不走 Next 路由表）
 - 进程内 `fetch` 转发，异常映射为 500（未设超时）
 
 ## 验证

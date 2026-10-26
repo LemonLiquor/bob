@@ -5,7 +5,7 @@ function getWsUrl(): string {
   if (typeof window === "undefined") return "";
   console.log(`[ws] current hostname: ${window.location.hostname}`);
 
-  // 统一端口（custom server）：ws 与页面同源同端口，按路径 /ws 分发。
+  // 统一端口：ws 与页面同源同端口，按路径 /ws 分发。
   // 本地、局域网、内网穿透（https→wss）统一走同源；特殊拓扑可用
   // .env.local 的 NEXT_PUBLIC_WS_URL 覆盖（不入库）
   const override = process.env.NEXT_PUBLIC_WS_URL;

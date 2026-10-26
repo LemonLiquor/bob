@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch server/custom-server.ts",
-    "dev:lan": "tsx server/custom-server.ts --host 0.0.0.0",
+    "dev": "tsx watch server/index.ts",
+    "dev:lan": "tsx server/index.ts --host 0.0.0.0",
     "build": "next build",
-    "start": "tsx server/custom-server.ts --prod",
+    "start": "tsx server/index.ts --prod",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest"

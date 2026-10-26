@@ -102,22 +102,22 @@
 
 
 
-## 统一端口：custom server 单进程单端口（Next 页面 + ws）
+## 统一端口：单进程单端口（Next 页面 + ws）
 
 - **日期**：2026-10-04（首次提出）
-- **主题**：内网穿透联机需要"一条隧道 + 一次证书同意"，端口分离（3000/3001）导致浏览器按 host:port 记忆证书例外、两次同意且朋友端连接配置易错。**修订**"ws 独立 :3001 避免 HMR 冲突"决策（该动机实为 Next 未开放 upgrade 钩子，用 custom server 夺回即可）
+- **主题**：内网穿透联机需要"一条隧道 + 一次证书同意"，端口分离（3000/3001）导致浏览器按 host:port 记忆证书例外、两次同意且朋友端连接配置易错。**修订**"ws 独立 :3001 避免 HMR 冲突"决策（该动机实为 Next 未开放 upgrade 钩子，用统一端口入口夺回即可）
 
 **决定了什么**：
 
-- **`server/custom-server.ts` 统一入口**：`next({ dev, turbopack })` 编程 API + `http.createServer`，HTTP 请求交 `getRequestHandler()`、`/ws` upgrade 交游戏服、其余 upgrade（`/_next/webpack-hmr`）交还 `getUpgradeHandler()`。一个进程一个端口（dev 3000）
+- **`server/index.ts` 统一入口**：`next({ dev, turbopack })` 编程 API + `http.createServer`，HTTP 请求交 `getRequestHandler()`、`/ws` upgrade 交游戏服、其余 upgrade（`/_next/webpack-hmr`）交还 `getUpgradeHandler()`。一个进程一个端口（dev 3000）
 - **ws 逻辑抽 `server/game-ws.ts`**（noServer + `WS_PATH`/`isWsPath`）：宿主只做 upgrade 路由；独立 ws 模式的 `server/index.ts` 已移除（统一端口覆盖全部使用场景）
 - **客户端 ws 地址同源回退**（connection.ts）：`ws(s)://当前域名/ws` 按页面协议自动切换，本地/局域网/隧道统一；`NEXT_PUBLIC_WS_URL` 环境变量可覆盖（`.env.local`，改后需重启重新内联）
-- **脚本**：`dev` = custom server；`dev:lan` = `--host 0.0.0.0`；`start` = `--prod`（先 `next build`）
+- **脚本**：`dev` = 统一端口入口；`dev:lan` = `--host 0.0.0.0`；`start` = `--prod`（先 `next build`）
 - 启动顺序坑：`getRequestHandler`/`getUpgradeHandler` 必须在 `await app.prepare()` 之后调用
 
 **否决了什么**：
 
-- **本地反代脚本分流**（node proxy 按 /ws 分发到 3000/3001）：效果相同但多一个常驻进程，打包部署时变多余运维件；已被 custom server 取代
+- **本地反代脚本分流**（node proxy 按 /ws 分发到 3000/3001）：效果相同但多一个常驻进程，打包部署时变多余运维件；已被统一端口入口取代
 - **SSE 替代 ws**（动作 POST + 广播 SSE）：可行但拖拽每动作一次 HTTP 往返、重连语义自管，收益不抵改造成本
 - **隧道层路径分流**（Cloudflare Tunnel ingress）：本地零改动但绑定隧道选型，樱花Frp 不支持；留作未来迁移选项
 

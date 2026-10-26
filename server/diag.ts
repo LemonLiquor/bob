@@ -31,7 +31,7 @@ export function serverDiag(tag: string, data: unknown): void {
   writeLine(`[${tag}] ${JSON.stringify(data)}`);
 }
 
-/** 引擎 diagLog 的落盘 sink（custom-server 启动时注入）：line 已序列化 */
+/** 引擎 diagLog 的落盘 sink（index.ts 启动时注入）：line 已序列化 */
 export function attachEngineDiagSink(): void {
   setDiagSink((line) => writeLine(`[engine] ${line}`));
 }
