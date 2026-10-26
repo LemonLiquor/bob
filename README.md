@@ -57,7 +57,6 @@
 ```bash
 npm install
 npm run dev       # 统一服务（Next 页面 + ws）→ http://localhost:3000
-npm run dev:ws    # 独立 ws 模式（遗留兼容，前端单独托管时用）→ :3001
 ```
 
 浏览器打开 `http://localhost:3000`，输入昵称进入游戏广场：导入 PDF 生成桌游、试玩、或创建房间多人游玩。
@@ -86,7 +85,7 @@ bob/
 │   ├── pnp/                         # PDF 渲染 + 网格裁切
 │   ├── assets/                      # 卡牌资产内存缓存
 │   └── multiplayer/                 # 联机（connection / protocol / session / transport）
-└── server/                          # 服务端（custom-server 统一入口 / game-ws / index 独立模式 / handlers / room-manager / game-library）
+└── server/                          # 服务端（custom-server 统一入口 / game-ws / handlers / internal-api / room-manager / game-library / internal-api）
 ```
 
 ## 相关文档

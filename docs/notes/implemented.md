@@ -110,9 +110,9 @@
 **决定了什么**：
 
 - **`server/custom-server.ts` 统一入口**：`next({ dev, turbopack })` 编程 API + `http.createServer`，HTTP 请求交 `getRequestHandler()`、`/ws` upgrade 交游戏服、其余 upgrade（`/_next/webpack-hmr`）交还 `getUpgradeHandler()`。一个进程一个端口（dev 3000）
-- **ws 逻辑抽 `server/game-ws.ts`**（noServer + `WS_PATH`/`isWsPath`）：宿主只做 upgrade 路由；`server/index.ts` 退化为独立 ws 模式（`dev:ws`，:3001，遗留兼容：前端单独托管时用）
+- **ws 逻辑抽 `server/game-ws.ts`**（noServer + `WS_PATH`/`isWsPath`）：宿主只做 upgrade 路由；独立 ws 模式的 `server/index.ts` 已移除（统一端口覆盖全部使用场景）
 - **客户端 ws 地址同源回退**（connection.ts）：`ws(s)://当前域名/ws` 按页面协议自动切换，本地/局域网/隧道统一；`NEXT_PUBLIC_WS_URL` 环境变量可覆盖（`.env.local`，改后需重启重新内联）
-- **脚本**：`dev` = custom server；`dev:lan` = `--host 0.0.0.0`；`start` = `--prod`（先 `next build`）；`dev:ws` 保留
+- **脚本**：`dev` = custom server；`dev:lan` = `--host 0.0.0.0`；`start` = `--prod`（先 `next build`）
 - 启动顺序坑：`getRequestHandler`/`getUpgradeHandler` 必须在 `await app.prepare()` 之后调用
 
 **否决了什么**：
