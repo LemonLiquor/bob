@@ -2,6 +2,8 @@ import http from "node:http";
 import next from "next";
 import { createGameWss, isWsPath } from "./game-ws";
 import { attachEngineDiagSink } from "./diag";
+import { GameLibrary } from "./game-library";
+import { createInternalHandler, isInternalPath } from "./internal-api";
 
 /**
  * 统一端口服务（custom server）：一个进程一个端口同时服务
@@ -24,7 +26,12 @@ attachEngineDiagSink();
 
 const app = next({ dev, turbopack: dev });
 
-const wss = createGameWss();
+// 桌游库唯一实例：ws 消息与 /internal/games 必须共用它
+const gameLibrary = new GameLibrary();
+gameLibrary.loadAll();
+
+const wss = createGameWss(gameLibrary);
+const handleInternal = createInternalHandler(gameLibrary);
 
 async function main() {
   await app.prepare();
@@ -32,7 +39,14 @@ async function main() {
   const handle = app.getRequestHandler();
   const upgradeHandler = app.getUpgradeHandler();
 
-  const server = http.createServer((req, res) => handle(req, res));
+  const server = http.createServer((req, res) => {
+    // BFF 的 Route Handler 打进来的内部上游接口，不经过 Next 路由表
+    if (isInternalPath(req.url)) {
+      void handleInternal(req, res);
+      return;
+    }
+    handle(req, res);
+  });
 
   server.on("upgrade", (req, socket, head) => {
     if (isWsPath(req.url)) {

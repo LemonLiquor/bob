@@ -29,6 +29,11 @@ const GRID_COLS = 5;
 const GRID_ORIGIN = { x: 40, y: 40 };
 const GRID_STEP = { x: 300, y: 320 };
 
+/** 新桌游 id：时间戳只在仓库外取，避免在组件体里直接调用（渲染期纯净性） */
+function nextGameId(): string {
+  return `pnp-${Date.now()}`;
+}
+
 /** ImportFlow 提交载荷 */
 interface CommitPayload {
   sprites: Sprite[];
@@ -69,7 +74,6 @@ export default function LabPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false); // 上传确认弹窗
   const [error, setError] = useState<string | null>(null);
-  const pendingGameIdRef = useRef<string | null>(null); // 上传中的 gameId（匹配 game_uploaded）
   const pendingImportRef = useRef<{ gameId: string; name: string } | null>(null); // 导入中的桌游（匹配 game_data）
   const [importedFrom, setImportedFrom] = useState<{ id: string; name: string } | null>(null); // 导入模式标记（上传弹窗提示覆盖）
   const router = useRouter();
@@ -91,27 +95,17 @@ export default function LabPage() {
     pileCounterRef.current = nextSeq(initialState.piles.map((p) => p.id));
   }
 
-  // 上传结果：成功（匹配 gameId）→ 清草稿 + 跳转广场；失败 → 恢复可重试
+  // 上传结果：走 HTTP（/api/games），结果在 doUpload 里直接处理，不再等 WS 回执
   // 导入结果：game_data（匹配 pendingImport）→ 替换工作区
   useEffect(() => {
     const unsub = onMessage((msg: ServerMessage) => {
-      if (msg.type === "game_uploaded" && msg.gameId === pendingGameIdRef.current) {
-        pendingGameIdRef.current = null;
-        void clearDraft();
-        router.push("/games");
-      } else if (msg.type === "game_data" && pendingImportRef.current?.gameId === msg.gameId) {
+      if (msg.type === "game_data" && pendingImportRef.current?.gameId === msg.gameId) {
         const pending = pendingImportRef.current;
         pendingImportRef.current = null;
         importGame(pending.gameId, pending.name, msg.assets, msg.initialState);
-      } else if (msg.type === "error") {
-        if (pendingGameIdRef.current) {
-          pendingGameIdRef.current = null;
-          setUploading(false);
-          setError(msg.message || "上传失败，请重试"); // 透传服务端拒绝原因（如：不允许覆盖）
-        } else if (pendingImportRef.current) {
-          pendingImportRef.current = null;
-          setError("导入失败，请重试");
-        }
+      } else if (msg.type === "error" && pendingImportRef.current) {
+        pendingImportRef.current = null;
+        setError("导入失败，请重试");
       }
     });
     return unsub;
@@ -221,7 +215,7 @@ export default function LabPage() {
   function handleCommit({ sprites: batchSprites, groups, sizes, fileName, name: batchName }: CommitPayload) {
     // 桌游名默认取第一个 PDF 文件名（lab 上传弹窗可改）；桌游 id 首次导入时固定
     if (!name.trim()) setName(batchName.trim() || fileName.replace(/\.pdf$/i, ""));
-    if (!gameIdRef.current) gameIdRef.current = `pnp-${Date.now()}`;
+    if (!gameIdRef.current) gameIdRef.current = nextGameId();
     const { prefabs: newPrefabs, entities, piles } = buildGameFromGroups(
       groups,
       sizes,
@@ -255,7 +249,7 @@ export default function LabPage() {
   function handleSave() {
     const payload = {
       meta: {
-        id: gameIdRef.current ?? `pnp-${Date.now()}`,
+        id: gameIdRef.current ?? nextGameId(),
         name: name.trim(),
         icon: "🖼️",
       },
@@ -277,7 +271,7 @@ export default function LabPage() {
     if (empty || uploading) return;
     const payload = {
       meta: {
-        id: gameIdRef.current ?? `pnp-${Date.now()}`,
+        id: gameIdRef.current ?? nextGameId(),
         name: name.trim() || "未命名桌游",
         icon: "🖼️",
       },
@@ -288,8 +282,33 @@ export default function LabPage() {
     setUploadOpen(false);
     setUploading(true);
     setError(null);
-    pendingGameIdRef.current = payload.meta.id;
-    send({ type: "upload_game", meta: payload.meta, assets: payload.assets, initialState: payload.initialState });
+    void uploadGame(payload);
+  }
+
+  /** 走 BFF（/api/games）：服务端做体积上限 + zod 校验 + 转发到游戏服，错误用统一错误码回来 */
+  async function uploadGame(payload: {
+    meta: { id: string; name: string; icon: string };
+    assets: GameAssets;
+    initialState: GameState;
+  }) {
+    try {
+      const res = await fetch("/api/games", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
+      if (!res.ok || !data?.ok) {
+        setUploading(false);
+        setError(data?.message ?? `上传失败（HTTP ${res.status}）`);
+        return;
+      }
+      await clearDraft();
+      router.push("/games");
+    } catch {
+      setUploading(false);
+      setError("网络异常，上传失败，请重试");
+    }
   }
 
   /** 手绘实体落地：sprite + prefab + 实例（网格空位摆位，z 置顶） */
