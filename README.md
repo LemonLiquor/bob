@@ -4,6 +4,23 @@
 
 网页桌游沙盒：上传 PDF 生成桌游，浏览器里拖拽操作。沙盒模式——规则由玩家自己遵守，游戏只提供"桌子"。
 
+## 技术栈
+
+- Next.js 16（App Router + Turbopack）+ TypeScript + Tailwind CSS v4
+- @dnd-kit/core — 拖拽
+- ws — WebSocket 游戏服（与 Next.js 同端口同进程，`/ws` 路径分发）
+- pdfjs-dist — PDF 渲染
+- zod — 数据校验
+
+## 快速开始
+
+```bash
+npm install
+npm run dev       # 统一服务（Next 页面 + ws）→ http://localhost:3000
+```
+
+浏览器打开 `http://localhost:3000`，输入昵称进入游戏广场：导入 PDF 生成桌游、试玩、或创建房间多人游玩。
+
 ## 功能
 
 - **核心沙盒**：卡牌自由拖放、翻面（F）、洗牌（R）、翻整叠（hover 牌堆 + Shift+F）；两张牌重叠自动合成牌堆（Pile）；hover 任意牌按 D 抓入手牌
@@ -43,26 +60,7 @@
 - [x] 玩家面板计分——计分按钮（+1 / +5 / +10）与计分显示
 - [x] 桌游预设（set）：对局中把摆好的桌面存为命名预设，任何房间一键加载（存桌游包跨房间；仅房主；保存时手牌退回桌面）
 
-
-## 技术栈
-
-- Next.js 16（App Router + Turbopack）+ TypeScript + Tailwind CSS v4
-- @dnd-kit/core — 拖拽
-- ws — WebSocket 游戏服（与 Next.js 同端口同进程，`/ws` 路径分发）
-- pdfjs-dist — PDF 渲染
-- zod — 数据校验
-
-## 快速开始
-
-```bash
-npm install
-npm run dev       # 统一服务（Next 页面 + ws）→ http://localhost:3000
-```
-
-浏览器打开 `http://localhost:3000`，输入昵称进入游戏广场：导入 PDF 生成桌游、试玩、或创建房间多人游玩。
-
 ## 项目结构
-
 ```
 bob/
 ├── app/
@@ -89,7 +87,6 @@ bob/
 ```
 
 ## 相关文档
-
 | 文档 | 内容 |
 |------|------|
 | [AGENTS.md](AGENTS.md) | 给 AI 代理与协作者的常驻命令（角色检查 / 需求格式 / 硬性规则） |
@@ -98,7 +95,6 @@ bob/
 | [docs/notes/](docs/notes/) | 决策记录（为什么 / 放弃了什么） |
 
 ## 架构要点
-
 - **引擎纯函数**：`lib/engine` 是零 UI 依赖的纯函数层（不可变更新），客户端和服务端共用
 - **动作注册表**：`lib/engine/reducers.ts` 一份动作分发，GameBoard 与服务端共用，新增动作零改分发层
 - **服务端权威**：服务端顺序应用动作即权威，`state_sync` 广播全量状态
